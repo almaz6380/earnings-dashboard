@@ -17,8 +17,16 @@ export function googleConfigured() {
   return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-export function redirectUri() {
-  return `${(process.env.PUBLIC_URL || 'http://localhost:3001').replace(/\/$/, '')}/api/google/callback`;
+// Basis-URL: PUBLIC_URL, sonst aus dem Request (Vercel setzt host + x-forwarded-proto), sonst lokal.
+export function baseUrl(req) {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/$/, '');
+  const host = req?.headers?.host;
+  if (host) return `${(req.headers['x-forwarded-proto'] || 'http').split(',')[0]}://${host}`;
+  return 'http://localhost:3001';
+}
+
+export function redirectUri(req) {
+  return `${baseUrl(req)}/api/google/callback`;
 }
 
 function stateSecret() {
@@ -40,10 +48,10 @@ export function verifyState(state) {
   return Date.now() - ts < 10 * 60 * 1000;
 }
 
-export function authUrl(state) {
+export function authUrl(state, req) {
   const q = new URLSearchParams({
     client_id: process.env.GOOGLE_CLIENT_ID,
-    redirect_uri: redirectUri(),
+    redirect_uri: redirectUri(req),
     response_type: 'code',
     scope: SCOPES.join(' '),
     access_type: 'offline',
@@ -66,8 +74,8 @@ async function tokenRequest(params) {
   });
 }
 
-export async function exchangeCode(code) {
-  const tok = await tokenRequest({ code, grant_type: 'authorization_code', redirect_uri: redirectUri() });
+export async function exchangeCode(code, req) {
+  const tok = await tokenRequest({ code, grant_type: 'authorization_code', redirect_uri: redirectUri(req) });
   if (!tok.refresh_token) throw new Error('Google hat keinen Refresh-Token geliefert. Zugriff unter myaccount.google.com/permissions entfernen und erneut verbinden.');
   let email = null;
   try {

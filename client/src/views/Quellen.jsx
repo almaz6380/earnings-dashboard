@@ -34,6 +34,7 @@ export default function Quellen({ s, status, onChanged }) {
           <>
             <p className="hint">Einmal anmelden, dann liest das Dashboard AdMob, AdSense und Play-Finanzberichte nur lesend.</p>
             <a className="btn primary" href="/api/google/start">Google verbinden</a>
+            {g.redirectUri && <p className="hint small">Weiterleitungs-URI für den OAuth-Client: <code>{g.redirectUri}</code></p>}
           </>
         )}
       </div>

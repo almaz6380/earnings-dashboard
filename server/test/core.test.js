@@ -113,3 +113,14 @@ test('Verlauf beschneiden', () => {
   assert.deepEqual(Object.keys(h.daily.admob), ['2026-09-01']);
   assert.deepEqual(Object.keys(h.balances), ['2026-09-01']);
 });
+
+test('Basis-URL: PUBLIC_URL, sonst aus dem Request', async () => {
+  const { baseUrl, redirectUri } = await import('../google/oauth.js');
+  delete process.env.PUBLIC_URL;
+  assert.equal(baseUrl({ headers: { host: 'app.vercel.app', 'x-forwarded-proto': 'https' } }), 'https://app.vercel.app');
+  assert.equal(baseUrl({ headers: { host: 'localhost:3001' } }), 'http://localhost:3001');
+  assert.equal(baseUrl(), 'http://localhost:3001');
+  process.env.PUBLIC_URL = 'https://fest.example/';
+  assert.equal(redirectUri({ headers: { host: 'egal' } }), 'https://fest.example/api/google/callback');
+  delete process.env.PUBLIC_URL;
+});

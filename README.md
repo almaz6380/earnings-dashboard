@@ -34,7 +34,7 @@ Zufallsstrings für die Secrets: `openssl rand -hex 32`.
 
 1. Neues Vercel-Projekt aus diesem Repo, Root = Projektordner. `vercel.json` bringt Region, Build und Cron mit.
 2. Supabase: `supabase.sql` einmal im SQL-Editor ausführen (die Tabelle darf neben anderen Tabellen liegen).
-3. Env-Variablen in Vercel eintragen (alle aus `.env.example`, die du nutzt). `PUBLIC_URL` = deine Vercel-URL ohne Slash.
+3. Env-Variablen in Vercel eintragen (alle aus `.env.example`, die du nutzt). `PUBLIC_URL` ist optional, die App leitet sie sonst aus der Anfrage ab.
 4. Deploy. Danach Env-Änderungen wirken erst nach erneutem Deploy.
 5. Cron: `vercel.json` ruft `/api/collect` täglich um 06:00 UTC auf. Vercel schickt dabei `Authorization: Bearer <CRON_SECRET>`,
    also `CRON_SECRET` setzen. Alternativ cron-job.org auf `https://<app>/api/collect?secret=<CRON_SECRET>`.
@@ -53,6 +53,7 @@ Projekt-ID steht in der URL des Projekts. → `REVENUECAT_API_KEY`, `REVENUECAT_
    (kein Review nötig, solange nur du die App nutzt). Dann bleibt die Verbindung dauerhaft.
 4. Anmeldedaten → OAuth-Client-ID → *Webanwendung*. Autorisierte Weiterleitungs-URIs:
    `https://<app>.vercel.app/api/google/callback` und `http://localhost:3001/api/google/callback`.
+   Die genaue URI zeigt das Dashboard im Tab „Quellen“ unter „Google verbinden“.
    → `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 5. Im Dashboard, Tab „Quellen“ → **Google verbinden**. Der Refresh-Token wird verschlüsselt gespeichert.
 

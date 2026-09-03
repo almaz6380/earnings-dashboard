@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   if (error) return back({ google: 'fehler', msg: `Google: ${error}` });
   if (!verifyState(state)) return back({ google: 'fehler', msg: 'Ungültiger oder abgelaufener Login-Status. Bitte erneut versuchen.' });
   try {
-    const { email } = await exchangeCode(code);
+    const { email } = await exchangeCode(code, req);
     return back({ google: 'ok', email: email || '' });
   } catch (e) {
     return back({ google: 'fehler', msg: e.message.slice(0, 300) });
