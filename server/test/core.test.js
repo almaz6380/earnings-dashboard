@@ -1,0 +1,115 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+process.env.SESSION_SECRET = 'test-secret-mindestens-16-zeichen';
+process.env.TOKEN_ENC_KEY = 'test-enc-key-mindestens-16-zeichen';
+process.env.DASHBOARD_PASSWORD = 'geheim123';
+process.env.BASE_CURRENCY = 'EUR';
+
+const { makeToken, verifyToken, parseCookies, cookieHeader, COOKIE } = await import('../auth.js');
+const { encrypt, decrypt } = await import('../crypto.js');
+const { toBase } = await import('../fx.js');
+const { mergeSource, pruneHistory, emptyHistory } = await import('../collect.js');
+const { buildSummary } = await import('../summary.js');
+const { formatDaily } = await import('../notify.js');
+const { makeState, verifyState } = await import('../google/oauth.js');
+
+const FX = { base: 'EUR', date: '2026-09-02', rates: { EUR: 1, USD: 1.25, CHF: 0.95 } };
+
+test('Sitzungs-Token: gültig, abgelaufen, manipuliert', () => {
+  const t = makeToken(1_000_000);
+  assert.ok(verifyToken(t, 1_000_000 + 1000));
+  assert.ok(!verifyToken(t, 1_000_000 + 31 * 86400000));
+  assert.ok(!verifyToken(t.slice(0, -2) + 'xx', 1_000_000));
+  assert.ok(!verifyToken('', 0));
+  assert.equal(parseCookies(`a=1; ${COOKIE}=${t}`)[COOKIE], t);
+  assert.match(cookieHeader('abc', { maxAgeSec: 10, secure: true }), /HttpOnly; SameSite=Lax; Max-Age=10; Secure/);
+});
+
+test('Verschlüsselung hin und zurück, Manipulation fliegt auf', () => {
+  const enc = encrypt('refresh-token-123');
+  assert.notEqual(enc, 'refresh-token-123');
+  assert.equal(decrypt(enc), 'refresh-token-123');
+  const [iv, tag, data] = enc.split('.');
+  assert.throws(() => decrypt([iv, tag, Buffer.from('xxxx').toString('base64')].join('.')));
+});
+
+test('Google-State signiert und zeitlich begrenzt', () => {
+  const s = makeState();
+  assert.ok(verifyState(s));
+  assert.ok(!verifyState(s + 'x'));
+  assert.ok(!verifyState(''));
+});
+
+test('Wechselkurs: Basis, Fremdwährung, unbekannt', () => {
+  assert.equal(toBase(10, 'EUR', FX), 10);
+  assert.equal(toBase(12.5, 'usd', FX), 10);
+  assert.equal(toBase(5, 'JPY', FX), null);
+  assert.equal(toBase(null, 'EUR', FX), null);
+});
+
+function sampleHistory() {
+  const h = emptyHistory();
+  const today = '2026-09-02';
+  mergeSource(h, 'admob', { daily: [{ date: '2026-09-01', amount: 12.5, currency: 'USD' }, { date: '2026-08-15', amount: 25, currency: 'USD' }] }, today);
+  mergeSource(h, 'appstore', { daily: [{ date: '2026-09-01', amount: 4, currency: 'EUR' }, { date: '2026-09-01', amount: 2.5, currency: 'USD' }],
+    payouts: [{ month: '2026-07', amount: 100, currency: 'USD' }] }, today);
+  mergeSource(h, 'play', { daily: [{ date: '2026-09-01', amount: 1, currency: 'EUR' }, { date: '2026-09-01', amount: 2, currency: 'EUR' }] }, today);
+  mergeSource(h, 'wise', { balances: [{ amount: 200, currency: 'EUR' }, { amount: 125, currency: 'USD' }] }, today);
+  mergeSource(h, 'adsense', { balance: { amount: 30, currency: 'EUR', label: 'Offen' } }, today);
+  h.sources.admob = { status: 'ok' }; h.sources.appstore = { status: 'ok' }; h.sources.play = { status: 'ok' }; h.sources.wise = { status: 'ok' };
+  h.sources.adsense = { status: 'error', lastError: 'kaputt' };
+  return h;
+}
+
+test('Verlauf mischen: gleiche Währung am Tag summiert, mehrere Währungen getrennt', () => {
+  const h = sampleHistory();
+  assert.deepEqual(h.daily.play['2026-09-01'], { EUR: 3 });
+  assert.deepEqual(h.daily.appstore['2026-09-01'], { EUR: 4, USD: 2.5 });
+  assert.deepEqual(h.payouts.appstore, { '2026-07': { USD: 100 } });
+  assert.equal(h.balances['2026-09-02'].wise.length, 2);
+  // erneuter Abruf ersetzt den Tageswert statt zu verdoppeln
+  mergeSource(h, 'play', { daily: [{ date: '2026-09-01', amount: 5, currency: 'EUR' }] }, '2026-09-03');
+  assert.deepEqual(h.daily.play['2026-09-01'], { EUR: 5 });
+});
+
+test('Zusammenfassung: Summen in EUR, Abo-Umsatz aus Stores, Konten und Auszahlungen', () => {
+  const s = buildSummary(sampleHistory(), FX, { collectedAt: '2026-09-02T06:00:00Z' }, new Date('2026-09-02T12:00:00Z'));
+  assert.equal(s.subsSource, 'stores');
+  // gestern: admob 10 + appstore (4 + 2) + play 3 = 19
+  assert.equal(s.kpis.yesterday, 19);
+  assert.equal(s.kpis.month, 19);
+  assert.equal(s.kpis.lastMonth, 20); // admob 25 USD im August
+  assert.equal(s.bySource.admob.yesterday, 10);
+  assert.equal(s.bySource.appstore.countsInTotal, true);
+  assert.equal(s.accountsEur, 300);
+  assert.equal(s.openEur, 30);
+  assert.deepEqual(s.payouts[0], { source: 'appstore', label: 'App Store', month: '2026-07', amount: 100, currency: 'USD', eur: 80 });
+  assert.equal(s.series.length, 90);
+  assert.equal(s.series.at(-2).total, 19);
+  assert.equal(s.monthly.at(-1).total, 19);
+  assert.equal(s.bySource.adsense.status, 'error');
+  assert.equal(s.bySource.revenuecat.status, 'unconfigured');
+  const text = formatDaily(s);
+  assert.match(text, /Gestern: 19,00 €/);
+  assert.match(text, /Konten \(Wise\/PayPal\): 300,00 €/);
+  assert.match(text, /AdSense: kaputt/);
+});
+
+test('RevenueCat-Tageswerte haben Vorrang vor Store-Erlösen', () => {
+  const h = sampleHistory();
+  mergeSource(h, 'revenuecat', { daily: [{ date: '2026-09-01', amount: 50, currency: 'EUR' }] }, '2026-09-02');
+  const s = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z'));
+  assert.equal(s.subsSource, 'revenuecat');
+  assert.equal(s.kpis.yesterday, 60); // admob 10 + rc 50
+  assert.equal(s.bySource.appstore.countsInTotal, false);
+});
+
+test('Verlauf beschneiden', () => {
+  const h = emptyHistory();
+  h.daily.admob = { '2020-01-01': { USD: 1 }, '2026-09-01': { USD: 1 } };
+  h.balances = { '2020-01-01': {}, '2026-09-01': {} };
+  pruneHistory(h, new Date('2026-09-02'));
+  assert.deepEqual(Object.keys(h.daily.admob), ['2026-09-01']);
+  assert.deepEqual(Object.keys(h.balances), ['2026-09-01']);
+});

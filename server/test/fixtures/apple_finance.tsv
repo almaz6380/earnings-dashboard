@@ -1,0 +1,4 @@
+Start Date	End Date	UPC	ISRC/ISBN	Vendor Identifier	Quantity	Partner Share	Extended Partner Share	Partner Share Currency	Sales or Return	Apple Identifier	Artist/Show/Developer/Author	Title	Label/Studio/Network/Developer/Publisher	Grid	Product Type Identifier	ISAN/Other Identifier	Country Of Sale	Pre-order Flag	Promo Code	Customer Price	Customer Currency
+07/06/2026	08/02/2026			pro_monthly	10	2.99	29.90	USD	S	123	Josef	App	Josef		IAY		US			3.99	USD
+07/06/2026	08/02/2026			pro_monthly	4	3.50	14.00	EUR	S	123	Josef	App	Josef		IAY		DE			4.99	EUR
+07/06/2026	08/02/2026			pro_monthly	-1	3.50	-3.50	EUR	R	123	Josef	App	Josef		IAY		DE			4.99	EUR

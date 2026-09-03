@@ -1,0 +1,6 @@
+Description,Transaction Date,Transaction Time,Tax Type,Transaction Type,Refund Type,Product Title,Product id,Product Type,Sku Id,Hardware,Buyer Country,Buyer State,Buyer Postal Code,Buyer Currency,Amount (Buyer Currency),Currency Conversion Rate,Merchant Currency,Amount (Merchant Currency)
+GPA.1234-0001,"Jul 1, 2026",10:15:00 PDT,,Charge,,Pro Abo,com.example.app,Subscription,pro_monthly,Pixel 8,DE,,,EUR,4.99,1.000000,EUR,4.99
+GPA.1234-0001,"Jul 1, 2026",10:15:00 PDT,,Google fee,,Pro Abo,com.example.app,Subscription,pro_monthly,Pixel 8,DE,,,EUR,-0.75,1.000000,EUR,-0.75
+GPA.1234-0001,"Jul 1, 2026",10:15:00 PDT,VAT,Tax,,Pro Abo,com.example.app,Subscription,pro_monthly,Pixel 8,DE,,,EUR,-0.80,1.000000,EUR,-0.80
+GPA.1234-0002,"Jul 2, 2026",08:00:00 PDT,,Charge,,Pro Abo,com.example.app,Subscription,pro_monthly,Galaxy,US,CA,,USD,5.49,0.910000,EUR,5.00
+GPA.1234-0002,"Jul 2, 2026",08:00:00 PDT,,Google fee,,Pro Abo,com.example.app,Subscription,pro_monthly,Galaxy,US,CA,,USD,-0.82,0.910000,EUR,-0.75

@@ -1,0 +1,4 @@
+Provider	Provider Country	SKU	Developer	Title	Version	Product Type Identifier	Units	Developer Proceeds	Begin Date	End Date	Customer Currency	Country Code	Currency of Proceeds	Apple Identifier	Customer Price
+APPLE	US	pro_monthly	Josef	App	1.0	IAY	3	2.99	09/01/2026	09/01/2026	USD	US	USD	123	3.99
+APPLE	US	pro_monthly	Josef	App	1.0	IAY	2	3.50	09/01/2026	09/01/2026	EUR	DE	EUR	123	4.99
+APPLE	US	app	Josef	App	1.0	1F	5	0	09/01/2026	09/01/2026	EUR	DE	EUR	123	0
