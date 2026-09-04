@@ -4,7 +4,7 @@ Privates Dashboard, das alle App-Einnahmen an einer Stelle in Euro zeigt:
 
 | Quelle | Was | Zugang |
 |---|---|---|
-| RevenueCat | Abo-Umsatz (Schätzung vor Store-Abzug), MRR, aktive Abos | Secret-API-Key v2 |
+| RevenueCat | Abo-Umsatz (Schätzung vor Store-Abzug), MRR, aktive Abos; mehrere Projekte möglich | Secret-API-Key v2 je Projekt |
 | AdMob | Werbeeinnahmen pro Tag | Google-Login |
 | AdSense | Web-Werbung pro Tag + offenes Guthaben | Google-Login |
 | Google Play | tatsächliche Auszahlung pro Monat (Earnings-Bericht) | Google-Login |
@@ -42,8 +42,15 @@ Zufallsstrings für die Secrets: `openssl rand -hex 32`.
 ## Quellen einrichten
 
 ### RevenueCat
-Dashboard → Projekt → API Keys → **Secret API key (v2)** mit Berechtigung *Charts & Metrics: Read*.
-Projekt-ID steht in der URL des Projekts. → `REVENUECAT_API_KEY`, `REVENUECAT_PROJECT_ID`.
+Dashboard → Projekt → Project settings → API keys → **+ New secret API key** mit Berechtigung
+*Charts & Metrics: Read*. Die Projekt-ID steht in der URL des Projekts
+(`app.revenuecat.com/projects/<ID>/…`). → `REVENUECAT_API_KEY`, `REVENUECAT_PROJECT_ID`.
+
+**Mehrere Projekte:** Ein Secret-Key gilt immer nur für ein Projekt. Für jedes weitere Projekt
+einen eigenen Schlüssel erzeugen und als Paar mit Nummer eintragen: `REVENUECAT_API_KEY_2` +
+`REVENUECAT_PROJECT_ID_2`, dann `_3` usw. bis `_5`. Optional je Projekt ein Anzeigename
+(`REVENUECAT_LABEL`, `REVENUECAT_LABEL_2`, …). Das Dashboard zeigt die Summe und darunter
+jede App einzeln.
 
 ### Google (ein Login für AdMob, AdSense, Play)
 1. [Google Cloud Console](https://console.cloud.google.com) → Projekt anlegen.

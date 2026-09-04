@@ -43,6 +43,11 @@ function SourceCard({ src, cur }) {
       {src.extra?.mrr != null && (
         <div className="hint">MRR {fmtMoney(src.extra.mrr, src.currency || cur)} · Abos {src.extra.activeSubscriptions ?? '–'} · Trials {src.extra.activeTrials ?? '–'}</div>
       )}
+      {src.extra?.projects?.length > 1 && src.extra.projects.map((p, i) => (
+        <div className="hint small" key={i}>
+          {p.label}: MRR {fmtMoney(p.mrr, p.currency || cur)} · Abos {p.activeSubscriptions ?? '–'}
+        </div>
+      ))}
       {src.error && <div className="error">{src.error}</div>}
       {src.asOf && src.status === 'ok' && <div className="hint small">Stand {fmtDate(src.asOf)}</div>}
     </div>

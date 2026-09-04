@@ -10,7 +10,7 @@ import { parseEarningsCsv, parseDate } from '../sources/playEarnings.js';
 import { sumSales, sumFinance, makeJwt } from '../sources/appstore.js';
 import { parseReport } from '../sources/admob.js';
 import { parse as parseAdsense } from '../sources/adsense.js';
-import { chartToDaily } from '../sources/revenuecat.js';
+import { chartToDaily, projects, mergeProjects, fetchData } from '../sources/revenuecat.js';
 
 const fx = (f) => fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', f), 'utf8');
 
@@ -110,4 +110,62 @@ test('RevenueCat-Chart defensiv lesen', () => {
   assert.deepEqual(chartToDaily({ values: [{ date: '2026-09-01', value: 3 }, { date: 'kaputt', value: 1 }] }, 'EUR'), [{ date: '2026-09-01', amount: 3, currency: 'EUR' }]);
   assert.deepEqual(chartToDaily({ series: [{ values: [{ x: 1788220800, y: 2.5 }] }] }, 'EUR'), [{ date: '2026-09-01', amount: 2.5, currency: 'EUR' }]);
   assert.deepEqual(chartToDaily({}, 'EUR'), []);
+});
+
+test('RevenueCat: nummerierte Projekt-Paare lesen', () => {
+  assert.deepEqual(projects({ REVENUECAT_API_KEY: 'k1', REVENUECAT_PROJECT_ID: 'p1' }),
+    [{ key: 'k1', id: 'p1', label: 'Projekt 1' }]);
+  assert.deepEqual(projects({
+    REVENUECAT_API_KEY: 'k1', REVENUECAT_PROJECT_ID: 'p1', REVENUECAT_LABEL: 'App A',
+    REVENUECAT_API_KEY_2: 'k2', REVENUECAT_PROJECT_ID_2: 'p2',
+    REVENUECAT_API_KEY_3: 'k3', // Projekt-ID fehlt -> wird übersprungen
+  }), [
+    { key: 'k1', id: 'p1', label: 'App A' },
+    { key: 'k2', id: 'p2', label: 'Projekt 2' },
+  ]);
+  assert.deepEqual(projects({}), []);
+});
+
+test('RevenueCat: zwei Projekte zusammenrechnen', () => {
+  const r = mergeProjects([
+    { label: 'App A', currency: 'EUR', daily: [{ date: '2026-09-01', amount: 10, currency: 'EUR' }], revenue28: 100, mrr: 40, activeSubscriptions: 12, activeTrials: 2, note: null },
+    { label: 'App B', currency: 'EUR', daily: [{ date: '2026-09-01', amount: 5, currency: 'EUR' }], revenue28: 50, mrr: 20, activeSubscriptions: 6, activeTrials: null, note: null },
+  ]);
+  assert.equal(r.currency, 'EUR');
+  assert.equal(r.daily.length, 2); // collect.mergeSource summiert die gleichen Tage
+  assert.deepEqual(r.balances, [{ amount: 150, currency: 'EUR', label: 'Umsatz letzte 28 Tage' }]);
+  assert.equal(r.extra.mrr, 60);
+  assert.equal(r.extra.activeSubscriptions, 18);
+  assert.equal(r.extra.activeTrials, 2);
+  assert.deepEqual(r.extra.projects.map((p) => p.label), ['App A', 'App B']);
+  assert.match(r.note, /2 Projekte/);
+});
+
+test('RevenueCat: verschiedene Währungen bleiben getrennt', () => {
+  const r = mergeProjects([
+    { label: 'A', currency: 'EUR', daily: [], revenue28: 100, mrr: 10, activeSubscriptions: 1, activeTrials: 0, note: null },
+    { label: 'B', currency: 'USD', daily: [], revenue28: 60, mrr: 5, activeSubscriptions: 2, activeTrials: 0, note: null },
+  ]);
+  assert.equal(r.currency, null);
+  assert.deepEqual(r.balances.sort((a, b) => a.currency.localeCompare(b.currency)), [
+    { amount: 100, currency: 'EUR', label: 'Umsatz letzte 28 Tage' },
+    { amount: 60, currency: 'USD', label: 'Umsatz letzte 28 Tage' },
+  ]);
+});
+
+test('RevenueCat: ein kaputtes Projekt blockiert das andere nicht', async () => {
+  const env = { REVENUECAT_API_KEY: 'k1', REVENUECAT_PROJECT_ID: 'gut', REVENUECAT_API_KEY_2: 'k2', REVENUECAT_PROJECT_ID_2: 'kaputt' };
+  const alt = {};
+  for (const [k, v] of Object.entries(env)) { alt[k] = process.env[k]; process.env[k] = v; }
+  const fetchJSON = async (url) => {
+    if (url.includes('kaputt')) throw new Error('401 Unauthorized');
+    if (url.includes('/charts/')) throw new Error('403 kein Chart-Recht');
+    return { currency: 'EUR', metrics: [{ id: 'mrr', value: 33 }, { id: 'revenue', value: 99 }] };
+  };
+  const r = await fetchData({ fetchJSON });
+  assert.equal(r.extra.mrr, 33);
+  assert.equal(r.extra.projects.length, 1);
+  assert.match(r.note, /Nicht abrufbar: Projekt 2/);
+  assert.match(r.note, /Tagesverlauf nicht verfügbar/);
+  for (const [k, v] of Object.entries(alt)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
 });
