@@ -167,5 +167,8 @@ test('RevenueCat: ein kaputtes Projekt blockiert das andere nicht', async () => 
   assert.equal(r.extra.projects.length, 1);
   assert.match(r.note, /Nicht abrufbar: Projekt 2/);
   assert.match(r.note, /Tagesverlauf nicht verfügbar/);
+  // Das erfolgreiche Projekt steht einzeln in der Liste, damit die Übersicht zeigen kann,
+  // welche App überhaupt zählt.
+  assert.deepEqual(r.extra.projects.map((p) => p.label), ['Projekt 1']);
   for (const [k, v] of Object.entries(alt)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
 });
