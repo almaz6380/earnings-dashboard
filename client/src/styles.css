@@ -11,7 +11,7 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
+body { overscroll-behavior-y: contain; margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; }
 .app { max-width: 1100px; margin: 0 auto; padding: 16px; }
 code { font-size: 12px; color: var(--yellow); }
 
@@ -87,3 +87,7 @@ tr:last-child td { border-bottom: none; }
   .kpi-value { font-size: 20px; }
 }
 .nowrap { white-space: nowrap; }
+
+/* Ziehen zum Aktualisieren: Balken oberhalb der Kopfzeile, wächst mit dem Finger. */
+.ptr { display: flex; align-items: flex-end; justify-content: center; overflow: hidden; color: var(--muted); font-size: 12px; }
+.ptr span { padding-bottom: 8px; white-space: nowrap; }

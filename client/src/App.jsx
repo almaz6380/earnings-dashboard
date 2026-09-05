@@ -3,6 +3,7 @@ import Uebersicht from './views/Uebersicht.jsx';
 import Verlauf from './views/Verlauf.jsx';
 import Apps from './views/Apps.jsx';
 import Quellen from './views/Quellen.jsx';
+import PullToRefresh from './PullToRefresh.jsx';
 import { fmtDate } from './format.js';
 
 const TABS = [
@@ -92,6 +93,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <PullToRefresh onRefresh={collect} busy={busy} />
       <header className="top">
         <h1>Einnahmen</h1>
         <span className="sub">{state?.collectedAt ? `Stand ${fmtDate(state.collectedAt)}` : 'Noch kein Sammellauf'}{state?.fxDate ? ` · Kurse EZB ${state.fxDate}` : ''}</span>
