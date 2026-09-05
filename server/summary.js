@@ -52,6 +52,11 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
 
   const sumRange = (id, from, to) => round2(Object.entries(eurDaily[id] || {}).filter(([d]) => d >= from && d <= to).reduce((a, [, v]) => a + v, 0));
 
+  // Ein gemeldeter Null-Tag hat einen Eintrag, ein nicht gemeldeter Tag gar keinen.
+  // Daraus lässt sich ablesen, bis wann eine Quelle überhaupt geliefert hat -
+  // sonst ist "0,00 €" nicht von "noch keine Meldung" zu unterscheiden.
+  const letzterGemeldeter = (id) => Object.keys(history.daily?.[id] || {}).filter((d) => d <= today).sort().at(-1) || null;
+
   const bySource = {};
   const lastBalanceDate = Object.keys(history.balances || {}).sort().at(-1);
   for (const id of Object.keys(meta)) {
@@ -72,11 +77,23 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
       ...r,
       balances: balEntries, balanceDate: balEntries.length ? lastBalanceDate : null,
       hasDaily: Object.keys(eurDaily[id] || {}).length > 0,
+      lastDayDate: letzterGemeldeter(id),
+      lastDay: eurDaily[id]?.[letzterGemeldeter(id)] ?? null,
     };
   }
 
   const kpis = {};
   for (const k of Object.keys(ranges)) kpis[k] = round2(earnedIds.reduce((a, id) => a + bySource[id][k], 0));
+  // Jüngster Tag, den überhaupt eine zählende Quelle gemeldet hat, plus dessen Summe.
+  const lastDayDate = earnedIds.map((id) => bySource[id].lastDayDate).filter(Boolean).sort().at(-1) || null;
+  kpis.lastDay = lastDayDate
+    ? round2(earnedIds.reduce((a, id) => a + (eurDaily[id]?.[lastDayDate] ?? 0), 0))
+    : null;
+  // Nicht jede Quelle ist gleich schnell. Wer an diesem Tag nichts gemeldet hat,
+  // steuert 0 bei - das muss die Anzeige sagen, sonst wirkt die Summe vollständig.
+  const mitTageswerten = earnedIds.filter((id) => bySource[id].hasDaily);
+  const lastDaySources = mitTageswerten.filter((id) => eurDaily[id]?.[lastDayDate] != null).map((id) => meta[id].label);
+  const lastDayFehlend = mitTageswerten.filter((id) => eurDaily[id]?.[lastDayDate] == null).map((id) => meta[id].label);
 
   // Tagesreihe (90 Tage) und Monatsreihe (12 Monate) über alle Quellen mit Tageswerten
   const dailyIds = Object.keys(eurDaily).filter((id) => Object.keys(eurDaily[id]).length);
@@ -167,6 +184,9 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     fxDate: fx.date,
     kpis,
     subsSource: hasRcDaily ? 'revenuecat' : 'stores',
+    lastDayDate,
+    lastDaySources,
+    lastDayFehlend,
     bySource,
     apps,
     series,

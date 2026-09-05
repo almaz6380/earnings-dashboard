@@ -29,7 +29,10 @@ function SourceCard({ src, cur }) {
       <div className="hint">{src.art}{src.countsInTotal ? ' · zählt zur Summe' : ''}</div>
       {src.hasDaily && (
         <div className="row3">
-          <div><div className="hint">Gestern</div><div className="num">{fmtMoney(src.yesterday, cur)}</div></div>
+          <div>
+            <div className="hint">{src.lastDayDate ? fmtDay(src.lastDayDate) : 'Letzter Tag'}</div>
+            <div className="num">{src.lastDayDate ? fmtMoney(src.lastDay, cur) : '–'}</div>
+          </div>
           <div><div className="hint">30 Tage</div><div className="num">{fmtMoney(src.d30, cur)}</div></div>
           <div><div className="hint">Monat</div><div className="num">{fmtMoney(src.month, cur)}</div></div>
         </div>
@@ -64,7 +67,10 @@ export default function Uebersicht({ s }) {
   return (
     <>
       <div className="grid kpis">
-        <Kpi label="Gestern" value={k.yesterday} cur={cur} />
+        <Kpi label="Letzter Tag" value={k.lastDay} cur={cur}
+          hint={s.lastDayDate
+            ? `${fmtDay(s.lastDayDate)}${s.lastDayFehlend?.length ? ` · ohne ${s.lastDayFehlend.join(', ')}` : ''}`
+            : 'noch keine Meldung'} />
         <Kpi label="7 Tage" value={k.d7} cur={cur} />
         <Kpi label="30 Tage" value={k.d30} cur={cur} />
         <Kpi label="Dieser Monat" value={k.month} cur={cur} />
@@ -113,7 +119,10 @@ export default function Uebersicht({ s }) {
         </div>
       )}
       {s.series?.length > 0 && (
-        <p className="hint small">Letzter Tag mit Daten: {fmtDay([...s.series].reverse().find((r) => r.total > 0)?.date)}</p>
+        <p className="hint small">
+          Kein Wert für heute: die Quellen melden mit Verzug (AdMob und AdSense 1–2 Tage, App Store am Folgetag,
+          Play und Apple-Auszahlungen monatlich). „–" heißt: noch keine Meldung. 0,00 € heißt: gemeldet, aber nichts verdient.
+        </p>
       )}
     </>
   );

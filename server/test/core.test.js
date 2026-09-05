@@ -168,6 +168,37 @@ test('Nicht umrechenbare Währungen: Betrag statt nur Kürzel', () => {
   assert.deepEqual(buildSummary(h2, FX, null, new Date('2026-09-02T12:00:00Z')).unconverted, []);
 });
 
+test('Letzter gemeldeter Tag: gemeldete Null ist nicht dasselbe wie keine Meldung', () => {
+  const h = emptyHistory();
+  // AdMob meldet bis zum 01.09. und liefert für den 01. eine echte Null.
+  mergeSource(h, 'admob', { daily: [
+    { date: '2026-08-31', amount: 2, currency: 'EUR' },
+    { date: '2026-09-01', amount: 0, currency: 'EUR' },
+  ] }, '2026-09-03');
+  // AdSense ist einen Tag weiter.
+  mergeSource(h, 'adsense', { daily: [{ date: '2026-09-02', amount: 1.5, currency: 'EUR' }] }, '2026-09-03');
+  const s = buildSummary(h, FX, null, new Date('2026-09-03T12:00:00Z'));
+
+  // Der jüngste gemeldete Tag über alle zählenden Quellen, nicht der jüngste mit Umsatz.
+  assert.equal(s.lastDayDate, '2026-09-02');
+  assert.equal(s.kpis.lastDay, 1.5);
+  // Je Quelle ihr eigener letzter Tag - AdMob mit einer echten Null.
+  assert.equal(s.bySource.admob.lastDayDate, '2026-09-01');
+  assert.equal(s.bySource.admob.lastDay, 0);
+  // Eine Quelle ohne jede Meldung bleibt null statt 0 - das unterscheidet die Anzeige.
+  assert.equal(s.bySource.play.lastDayDate, null);
+  assert.equal(s.bySource.play.lastDay, null);
+  // Am 02.09. hatte AdMob noch nichts gemeldet; die Kachel nennt das, statt Vollständigkeit vorzutäuschen.
+  assert.deepEqual(s.lastDaySources, ['AdSense']);
+  assert.deepEqual(s.lastDayFehlend, ['AdMob']);
+});
+
+test('Ohne jede Meldung bleibt der letzte Tag leer', () => {
+  const s = buildSummary(emptyHistory(), FX, null, new Date('2026-09-03T12:00:00Z'));
+  assert.equal(s.lastDayDate, null);
+  assert.equal(s.kpis.lastDay, null);
+});
+
 test('Verlauf beschneiden', () => {
   const h = emptyHistory();
   h.daily.admob = { '2020-01-01': { USD: 1 }, '2026-09-01': { USD: 1 } };
