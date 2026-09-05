@@ -95,11 +95,14 @@ export default function App() {
     <div className="app">
       <PullToRefresh onRefresh={collect} busy={busy} />
       <header className="top">
-        <h1>Einnahmen</h1>
-        <span className="sub">{state?.collectedAt ? `Stand ${fmtDate(state.collectedAt)}` : 'Noch kein Sammellauf'}{state?.fxDate ? ` · Kurse EZB ${state.fxDate}` : ''}</span>
-        <span className="spacer" />
-        <button className="btn" onClick={collect} disabled={busy}>{busy ? 'Sammle …' : 'Aktualisieren'}</button>
-        <button className="btn ghost" onClick={logout}>Abmelden</button>
+        <div className="top-row">
+          <h1>Einnahmen</h1>
+          <span className="sub">{state?.collectedAt ? `Stand ${fmtDate(state.collectedAt)}` : 'Noch kein Sammellauf'}</span>
+        </div>
+        <div className="btnrow">
+          <button className="btn small" onClick={collect} disabled={busy}>{busy ? 'Sammle …' : 'Aktualisieren'}</button>
+          <button className="btn small ghost" onClick={logout}>Abmelden</button>
+        </div>
       </header>
       <nav className="tabs">
         {TABS.map((t) => (

@@ -64,7 +64,8 @@ export default function Quellen({ s, status, onChanged }) {
         <table>
           <tbody>
             <tr><td>Speicher</td><td>{status.storage}</td></tr>
-            <tr><td>Basiswährung</td><td>{status.baseCurrency}</td></tr>
+            <tr><td>Basiswährung</td><td>{status.baseCurrency}{s.fxDate ? ` · EZB-Kurse vom ${s.fxDate}` : ''}</td></tr>
+            <tr><td>Summe</td><td>Werbung (AdMob, AdSense) + Abo-Umsatz {s.subsSource === 'revenuecat' ? 'laut RevenueCat (vor Store-Abzug)' : 'laut Store-Erlösen (App Store, Play)'}. Quellen melden mit 1–2 Tagen Verzug.</td></tr>
             <tr><td>Cron-Secret</td><td>{status.cronConfigured ? 'gesetzt (täglicher Lauf per Vercel-Cron)' : 'fehlt – kein automatischer Lauf'}</td></tr>
             <tr><td>Benachrichtigung</td><td>{status.notify ? 'Telegram/ntfy aktiv' : 'keine (TELEGRAM_* oder NTFY_TOPIC setzen)'}</td></tr>
             <tr><td>Letzter Lauf</td><td>{status.latest ? `${fmtDate(status.latest.collectedAt)} (${status.latest.ms} ms)` : 'noch keiner'}</td></tr>

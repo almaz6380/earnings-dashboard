@@ -1,59 +1,69 @@
 import React from 'react';
-import { fmtMoney, fmtZahl, fmtDate, fmtDay, fmtMonth, SOURCE_ORDER, SOURCE_COLORS } from '../format.js';
+import { fmtMoney, fmtZahl, fmtDay, fmtMonth, SOURCE_ORDER, SOURCE_COLORS } from '../format.js';
 
-function Kpi({ label, value, cur, hint }) {
-  return (
-    <div className="kpi">
-      <div className="kpi-label">{label}</div>
-      <div className="kpi-value">{fmtMoney(value, cur)}</div>
-      {hint && <div className="hint">{hint}</div>}
-    </div>
-  );
+// Auf Amber ist dunkle Schrift lesbar, auf den anderen Quellenfarben weiße.
+const DUNKLE_SCHRIFT = new Set(['appstore']);
+
+function summe(list) {
+  return list.filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0);
 }
 
-function StatusBadge({ status }) {
-  const map = { ok: ['ok', 'aktiv'], error: ['err', 'Fehler'], unconfigured: ['off', 'nicht eingerichtet'] };
-  const [cls, text] = map[status] || map.unconfigured;
-  return <span className={`badge ${cls}`}>{text}</span>;
+// Was auf der farbigen Karte steht: eine Statuszeile, ein Betrag, ein Label.
+function karte(src, s) {
+  const cur = s.baseCurrency;
+  if (src.status === 'error') {
+    return { wait: true, sub: 'Fehler', text: (src.error || 'Abruf fehlgeschlagen').slice(0, 70) };
+  }
+  switch (src.id) {
+    case 'admob': {
+      const n = (s.apps || []).filter((a) => a.sources.some((q) => q.id === 'admob')).length;
+      return { sub: n ? `aktiv · ${n} Apps` : 'aktiv', amount: fmtMoney(src.d30, cur), label: '30 Tage' };
+    }
+    case 'adsense': {
+      const offen = src.balances?.length ? summe(src.balances) : null;
+      return offen != null
+        ? { sub: 'aktiv · Web', amount: fmtMoney(offen, cur), label: 'offenes Guthaben' }
+        : { sub: 'aktiv · Web', amount: fmtMoney(src.d30, cur), label: '30 Tage' };
+    }
+    case 'revenuecat': {
+      const abos = src.extra?.activeSubscriptions ?? 0;
+      const projekte = src.extra?.projects?.length || 1;
+      return { sub: `${abos} Abos · ${projekte} ${projekte === 1 ? 'Projekt' : 'Projekte'}`, amount: fmtMoney(src.d30, cur), label: '30 Tage' };
+    }
+    case 'wise':
+    case 'paypal':
+      return { sub: 'Kontostand', amount: fmtMoney(summe(src.balances || []), cur), label: 'aktuell' };
+    default:
+      if (!src.hasDaily) return { wait: true, sub: 'verbunden', text: 'wartet auf ersten Verkauf' };
+      return { sub: 'aktiv', amount: fmtMoney(src.d30, cur), label: '30 Tage' };
+  }
 }
 
-function SourceCard({ src, cur }) {
-  const color = SOURCE_COLORS[src.id];
-  return (
-    <div className="panel source-card">
-      <div className="source-head">
-        <span className="dot" style={{ background: color || 'var(--muted)' }} />
-        <span className="name">{src.label}</span>
-        <StatusBadge status={src.status} />
+function Tile({ src, s }) {
+  const k = karte(src, s);
+  const farbe = SOURCE_COLORS[src.id];
+  const style = { '--tile': farbe || 'var(--panel2)', '--ink': DUNKLE_SCHRIFT.has(src.id) ? '#1a1300' : '#ffffff' };
+  if (k.wait) {
+    return (
+      <div className="tile wait" style={style}>
+        <div>
+          <div className="name" style={{ color: src.status === 'error' ? 'var(--red)' : farbe }}>{src.label}</div>
+          <div className="sub">{k.sub}</div>
+        </div>
+        <div className="amt">{k.text}</div>
       </div>
-      <div className="hint">{src.art}{src.countsInTotal ? ' · zählt zur Summe' : ''}</div>
-      {src.hasDaily && (
-        <div className="row3">
-          <div>
-            <div className="hint">{src.lastDayDate ? fmtDay(src.lastDayDate) : 'Letzter Tag'}</div>
-            <div className="num">{src.lastDayDate ? fmtMoney(src.lastDay, cur) : '–'}</div>
-          </div>
-          <div><div className="hint">30 Tage</div><div className="num">{fmtMoney(src.d30, cur)}</div></div>
-          <div><div className="hint">Monat</div><div className="num">{fmtMoney(src.month, cur)}</div></div>
-        </div>
-      )}
-      {src.balances?.map((b, i) => (
-        <div key={i} className="balance">
-          <span className="hint">{b.label || 'Kontostand'}{b.currency !== cur ? ` · ${fmtMoney(b.amount, b.currency)}` : ''}</span>
-          <span className="num">{b.eur != null ? fmtMoney(b.eur, cur) : fmtMoney(b.amount, b.currency)}</span>
-        </div>
-      ))}
-      {src.extra?.mrr != null && (
-        <div className="hint">MRR {fmtMoney(src.extra.mrr, src.currency || cur)} · Abos {src.extra.activeSubscriptions ?? '–'} · Trials {src.extra.activeTrials ?? '–'}</div>
-      )}
-      {src.extra?.projects?.length > 0 && src.extra.projects.map((p, i) => (
-        <div className="hint small" key={i}>
-          {p.label}: MRR {fmtMoney(p.mrr, p.currency || cur)} · Abos {p.activeSubscriptions ?? '–'}
-        </div>
-      ))}
-      {src.note && <div className={/Nicht abrufbar|nicht verfügbar|Fehler/.test(src.note) ? 'warn' : 'hint small'}>{src.note}</div>}
-      {src.error && <div className="error">{src.error}</div>}
-      {src.asOf && src.status === 'ok' && <div className="hint small">Stand {fmtDate(src.asOf)}</div>}
+    );
+  }
+  return (
+    <div className="tile" style={style}>
+      <div>
+        <div className="name">{src.label}</div>
+        <div className="sub">{k.sub}</div>
+      </div>
+      <div>
+        <div className="amt">{k.amount}</div>
+        <div className="lbl">{k.label}</div>
+      </div>
     </div>
   );
 }
@@ -63,66 +73,96 @@ export default function Uebersicht({ s }) {
   const k = s.kpis;
   const sources = SOURCE_ORDER.map((id) => s.bySource[id]).filter(Boolean);
   const active = sources.filter((x) => x.status !== 'unconfigured');
-  const payouts = s.payouts.slice(0, 8);
+  const top = [...(s.apps || [])].filter((a) => a.d30 > 0).sort((a, b) => b.d30 - a.d30).slice(0, 3);
+  const max = top[0]?.d30 || 1;
+  const payouts = s.payouts.slice(0, 6);
+  const letzterTagTitle = s.lastDayFehlend?.length ? `Ohne ${s.lastDayFehlend.join(', ')} – noch keine Meldung für diesen Tag` : undefined;
+
   return (
     <>
-      <div className="grid kpis">
-        <Kpi label="Letzter Tag" value={k.lastDay} cur={cur}
-          hint={s.lastDayDate
-            ? `${fmtDay(s.lastDayDate)}${s.lastDayFehlend?.length ? ` · ohne ${s.lastDayFehlend.join(', ')}` : ''}`
-            : 'noch keine Meldung'} />
-        <Kpi label="7 Tage" value={k.d7} cur={cur} />
-        <Kpi label="30 Tage" value={k.d30} cur={cur} />
-        <Kpi label="Dieser Monat" value={k.month} cur={cur} />
-        <Kpi label="Letzter Monat" value={k.lastMonth} cur={cur} />
-        {(s.accountsEur > 0 || s.openEur > 0) && <Kpi label="Konten + offen" value={(s.accountsEur || 0) + (s.openEur || 0)} cur={cur} hint="Wise/PayPal + offenes AdSense-Guthaben" />}
+      <div className="hero">
+        <div className="hero-top">
+          <div>
+            <div className="hero-label">Letzte 30 Tage</div>
+            <div className="hero-value">{fmtMoney(k.d30, cur)}</div>
+          </div>
+          <div className="hero-side">
+            <div className="lbl">Vormonat</div>
+            <div className="val">{fmtMoney(k.lastMonth, cur)}</div>
+          </div>
+        </div>
+        <div className="mini">
+          <div title={letzterTagTitle}>
+            <div className="lbl">Letzter Tag</div>
+            <div className="val">{s.lastDayDate ? fmtMoney(k.lastDay, cur) : '–'}</div>
+            <div className="lbl sub">{s.lastDayDate ? fmtDay(s.lastDayDate).slice(0, 6) : 'noch keine Meldung'}{s.lastDayFehlend?.length ? ' *' : ''}</div>
+          </div>
+          <div>
+            <div className="lbl">7 Tage</div>
+            <div className="val">{fmtMoney(k.d7, cur)}</div>
+          </div>
+          <div>
+            <div className="lbl">Monat</div>
+            <div className="val">{fmtMoney(k.month, cur)}</div>
+          </div>
+        </div>
       </div>
-      <p className="hint">
-        Summe = Werbung (AdMob, AdSense) + Abo-Umsatz {s.subsSource === 'revenuecat' ? 'laut RevenueCat (vor Store-Abzug)' : 'laut Store-Erlösen (App Store Sales + Play)'}. Schätzwerte, umgerechnet mit EZB-Kursen.
-      </p>
+
       {s.unconverted?.length > 0 && (
         <p className="warn">
           Nicht in {cur} umgerechnet und deshalb <b>nicht in der Summe enthalten</b>:{' '}
           {s.unconverted.map((u) => `${fmtZahl(u.gesamt)} ${u.currency}${u.d30 && u.d30 !== u.gesamt ? ` (davon ${fmtZahl(u.d30)} in 30 Tagen)` : ''}`).join(', ')}.
-          {' '}Die EZB veröffentlicht für diese Währung keinen Kurs.
         </p>
       )}
       {s.fxError && <p className="warn">Wechselkurse gerade nicht erreichbar ({s.fxError}).</p>}
 
-      {!active.length && (
+      {!active.length ? (
         <div className="panel">
           <h2>Noch keine Quelle eingerichtet</h2>
           <p className="hint">Im Tab „Quellen" steht, welche Variablen fehlen. Danach „Aktualisieren" tippen.</p>
         </div>
-      )}
-      <div className="grid cols3">
-        {active.map((src) => <SourceCard key={src.id} src={src} cur={cur} />)}
-      </div>
-
-      {payouts.length > 0 && (
-        <div className="panel">
-          <h2>Tatsächliche Auszahlungen</h2>
-          <table>
-            <thead><tr><th>Monat</th><th>Quelle</th><th>Betrag</th><th>in {cur}</th></tr></thead>
-            <tbody>
-              {payouts.map((p, i) => (
-                <tr key={i}>
-                  <td>{fmtMonth(p.month)}</td>
-                  <td>{p.label}</td>
-                  <td>{fmtMoney(p.amount, p.currency)}</td>
-                  <td>{p.eur != null ? fmtMoney(p.eur, cur) : '–'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="hint small">Apple rechnet in Fiskalmonaten ab, Google Play in Kalendermonaten.</p>
+      ) : (
+        <div className="tiles">
+          {active.map((src) => <Tile key={src.id} src={src} s={s} />)}
         </div>
       )}
-      {s.series?.length > 0 && (
-        <p className="hint small">
-          Kein Wert für heute: die Quellen melden mit Verzug (AdMob und AdSense 1–2 Tage, App Store am Folgetag,
-          Play und Apple-Auszahlungen monatlich). „–" heißt: noch keine Meldung. 0,00 € heißt: gemeldet, aber nichts verdient.
-        </p>
+
+      {top.length > 0 && (
+        <>
+          <div className="section">Top-Apps · 30 Tage</div>
+          <div className="bars">
+            {top.map((a) => {
+              const farbe = SOURCE_COLORS[a.sources[0]?.id] || 'var(--blue)';
+              return (
+                <div className="barrow" key={a.key}>
+                  <span className="dot" style={{ background: farbe }} />
+                  <div className="nm">{a.name}</div>
+                  <div className="bar"><div className="bar-fill" style={{ width: `${Math.max(1, Math.round((a.d30 / max) * 100))}%`, background: farbe }} /></div>
+                  <div className="v">{fmtMoney(a.d30, cur)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {payouts.length > 0 && (
+        <>
+          <div className="section">Auszahlungen</div>
+          <div className="panel">
+            <table>
+              <tbody>
+                {payouts.map((p, i) => (
+                  <tr key={i}>
+                    <td>{fmtMonth(p.month)}</td>
+                    <td>{p.label}</td>
+                    <td style={{ textAlign: 'right' }}><b>{p.eur != null ? fmtMoney(p.eur, cur) : fmtMoney(p.amount, p.currency)}</b></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </>
   );
