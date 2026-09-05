@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 import { unzip } from '../zip.js';
 import { parseEarningsCsv, parseDate } from '../sources/playEarnings.js';
-import { sumSales, sumFinance, makeJwt, salesByApp } from '../sources/appstore.js';
+import { sumSales, sumFinance, makeJwt, salesByApp, reportUrl, appleFehler, zusammenfassen } from '../sources/appstore.js';
 import { parseReport } from '../sources/admob.js';
 import { parse as parseAdsense } from '../sources/adsense.js';
 import { chartToDaily, projects, mergeProjects, fetchData } from '../sources/revenuecat.js';
@@ -128,6 +128,28 @@ test('Play-Earnings: Aufschlüsselung nach App', () => {
   assert.equal(a.name, 'Pro Abo');
   assert.equal(a.currency, 'EUR');
   assert.ok(a.amount > 0);
+});
+
+test('Apple-Berichtsadresse: der Pfad gehört nicht in die Abfrage', () => {
+  const url = reportUrl('salesReports', { 'filter[reportType]': 'SALES', 'filter[vendorNumber]': '94467826' });
+  assert.equal(url.split('?')[0], 'https://api.appstoreconnect.apple.com/v1/salesReports');
+  // Genau die übergebenen Filter, kein zusätzlicher Parameter – Apple antwortet sonst mit 400.
+  assert.deepEqual([...new URL(url).searchParams.keys()].sort(), ['filter[reportType]', 'filter[vendorNumber]']);
+});
+
+test('Apple-Fehler: die Begründung statt der Fehler-ID', () => {
+  const e = Object.assign(new Error('GET https://api.appstoreconnect.apple.com/v1/salesReports -> 400: {"errors"…'), {
+    status: 400,
+    body: JSON.stringify({ errors: [{ id: '8ee', status: '400', code: 'PARAMETER_ERROR.INVALID', title: 'A parameter has an invalid value', detail: "The parameter '_path' is not permitted" }] }),
+  });
+  assert.equal(appleFehler(e), "PARAMETER_ERROR.INVALID: The parameter '_path' is not permitted");
+  // Ohne verwertbaren Rumpf bleibt die rohe Meldung übrig.
+  assert.match(appleFehler(new Error('Netz weg')), /Netz weg/);
+});
+
+test('Gleiche Fehler werden gezählt statt wiederholt', () => {
+  assert.equal(zusammenfassen(['A', 'A', 'A', 'B']), '3× A | B');
+  assert.equal(zusammenfassen(['A']), 'A');
 });
 
 test('AdSense: Tageswerte und offenes Guthaben', () => {

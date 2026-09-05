@@ -9,8 +9,11 @@ export async function getJSON(url, init = {}) {
 export async function getBuffer(url, init = {}) {
   const res = await fetch(url, init);
   if (!res.ok) {
-    const err = new Error(`${init.method || 'GET'} ${url.split('?')[0]} -> ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    const text = await res.text();
+    const err = new Error(`${init.method || 'GET'} ${url.split('?')[0]} -> ${res.status}: ${text.slice(0, 300)}`);
     err.status = res.status;
+    // Ungekürzt, damit der Aufrufer die eigentliche Begründung herauslesen kann.
+    err.body = text;
     throw err;
   }
   return Buffer.from(await res.arrayBuffer());

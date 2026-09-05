@@ -25,10 +25,31 @@ export function makeJwt({ kid, iss, key, now = Math.floor(Date.now() / 1000) }) 
   return `${input}.${sig.toString('base64url')}`;
 }
 
-async function report(params) {
+// Adresse eines Berichts. Der Pfad-Baustein darf NICHT in die Abfrage geraten -
+// Apple lehnt unbekannte Parameter mit 400 ab.
+export function reportUrl(path, filter) {
+  return `https://api.appstoreconnect.apple.com/v1/${path}?${new URLSearchParams(filter)}`;
+}
+
+// Apples Fehlerantwort ist JSON; brauchbar ist darin "detail", nicht die Fehler-ID.
+export function appleFehler(e) {
+  try {
+    const erste = JSON.parse(e.body || '').errors?.[0];
+    if (erste) return [erste.code, erste.detail || erste.title].filter(Boolean).join(': ').slice(0, 200);
+  } catch { /* kein JSON, dann die rohe Meldung */ }
+  return String(e.message || e).slice(0, 200);
+}
+
+// Gleiche Fehler nicht 17-mal auflisten, sondern zählen.
+export function zusammenfassen(liste) {
+  const anzahl = new Map();
+  for (const t of liste) anzahl.set(t, (anzahl.get(t) || 0) + 1);
+  return [...anzahl].map(([t, n]) => (n > 1 ? `${n}× ${t}` : t)).join(' | ');
+}
+
+async function report(path, filter) {
   const jwt = makeJwt({ kid: process.env.ASC_KEY_ID, iss: process.env.ASC_ISSUER_ID, key: privateKey() });
-  const q = new URLSearchParams(params);
-  const buf = await getBuffer(`https://api.appstoreconnect.apple.com/v1/${params._path}?${q}`, {
+  const buf = await getBuffer(reportUrl(path, filter), {
     headers: { authorization: `Bearer ${jwt}`, accept: 'application/a-gzip' },
   });
   return (buf[0] === 0x1f && buf[1] === 0x8b ? zlib.gunzipSync(buf) : buf).toString('utf8');
@@ -44,7 +65,7 @@ export async function fetchData({ days = 14, knownDates = new Set(), knownMonths
     const date = ymd(daysAgo(i));
     if (knownDates.has(date) && i > 3) continue;
     try {
-      const tsv = await report({ _path: 'salesReports', 'filter[frequency]': 'DAILY', 'filter[reportSubType]': 'SUMMARY',
+      const tsv = await report('salesReports', { 'filter[frequency]': 'DAILY', 'filter[reportSubType]': 'SUMMARY',
         'filter[reportType]': 'SALES', 'filter[vendorNumber]': vendor, 'filter[reportDate]': date });
       const sums = sumSales(tsv);
       for (const [cur, amount] of Object.entries(sums)) { daily.push({ date, amount, currency: cur }); currency = currency || cur; }
@@ -52,7 +73,7 @@ export async function fetchData({ days = 14, knownDates = new Set(), knownMonths
       for (const a of salesByApp(tsv)) apps.push({ ...a, date });
     } catch (e) {
       if (e.status === 404) daily.push({ date, amount: 0, currency: currency || 'USD' });
-      else errors.push(`${date}: ${e.message.slice(0, 100)}`);
+      else errors.push(`Tagesverkäufe: ${appleFehler(e)}`);
     }
   }
 
@@ -62,15 +83,15 @@ export async function fetchData({ days = 14, knownDates = new Set(), knownMonths
     const month = d.toISOString().slice(0, 7);
     if (knownMonths.has(month)) continue;
     try {
-      const tsv = await report({ _path: 'financeReports', 'filter[regionCode]': 'ZZ', 'filter[reportType]': 'FINANCIAL',
+      const tsv = await report('financeReports', { 'filter[regionCode]': 'ZZ', 'filter[reportType]': 'FINANCIAL',
         'filter[vendorNumber]': vendor, 'filter[reportDate]': month });
       for (const [cur, amount] of Object.entries(sumFinance(tsv))) payouts.push({ month, amount, currency: cur, label: `App-Store-Auszahlung Fiskalmonat ${month}` });
     } catch (e) {
-      if (e.status !== 404) errors.push(`Finanzbericht ${month}: ${e.message.slice(0, 100)}`);
+      if (e.status !== 404) errors.push(`Finanzbericht: ${appleFehler(e)}`);
     }
   }
   return { currency: currency || 'USD', asOf: new Date().toISOString(), daily, payouts, apps, balance: null, extra: {},
-    note: [errors.length ? `Fehler: ${errors.join(' | ')}` : null, 'Apple rechnet in Fiskalmonaten ab; Finanzbericht ca. 5 Tage nach Monatsende.'].filter(Boolean).join(' ') };
+    note: [errors.length ? `Fehler: ${zusammenfassen(errors)}` : null, 'Apple rechnet in Fiskalmonaten ab; Finanzbericht ca. 5 Tage nach Monatsende.'].filter(Boolean).join(' ') };
 }
 
 // Sales-Report: Summe Units × Developer Proceeds je "Currency of Proceeds"
