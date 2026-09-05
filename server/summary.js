@@ -12,7 +12,25 @@ export const appKey = (name) => String(name || '').toLowerCase().normalize('NFD'
 export function buildSummary(history, fx, latest = null, now = new Date()) {
   const today = now.toISOString().slice(0, 10);
   const meta = Object.fromEntries(SOURCES.map((s) => [s.meta.id, s.meta]));
-  const unconverted = new Set();
+  const dstr = (n) => new Date(now.getTime() - n * 86400000).toISOString().slice(0, 10);
+  const monthStart = today.slice(0, 7) + '-01';
+  const lm = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+  const lastMonthStart = lm.toISOString().slice(0, 10);
+  const lastMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().slice(0, 10);
+  const ranges = { today: [today, today], yesterday: [dstr(1), dstr(1)], d7: [dstr(6), today], d30: [dstr(29), today], month: [monthStart, today], lastMonth: [lastMonthStart, lastMonthEnd] };
+
+  // Währungen, die die Kursquelle nicht führt (z. B. VND). Beträge mitzählen, damit
+  // sichtbar wird, um wie viel Geld es überhaupt geht - sonst sieht es aus wie null.
+  const unconverted = new Map();
+  const nichtUmgerechnet = (cur, amount, date) => {
+    const c = String(cur || '').toUpperCase();
+    if (!c) return;
+    const e = unconverted.get(c) || { currency: c, d30: 0, gesamt: 0 };
+    const a = Number(amount) || 0;
+    e.gesamt = round2(e.gesamt + a);
+    if (date && date >= ranges.d30[0] && date <= ranges.d30[1]) e.d30 = round2(e.d30 + a);
+    unconverted.set(c, e);
+  };
 
   // Tages-EUR je Quelle
   const eurDaily = {};
@@ -22,7 +40,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
       let sum = 0;
       for (const [cur, amt] of Object.entries(byCur)) {
         const v = toBase(amt, cur, fx);
-        if (v == null) unconverted.add(cur); else sum += v;
+        if (v == null) nichtUmgerechnet(cur, amt, date); else sum += v;
       }
       eurDaily[id][date] = round2(sum);
     }
@@ -33,12 +51,6 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
   const earnedIds = [...ADS, ...(hasRcDaily ? [SUBS_ESTIMATE] : STORES)].filter((id) => eurDaily[id]);
 
   const sumRange = (id, from, to) => round2(Object.entries(eurDaily[id] || {}).filter(([d]) => d >= from && d <= to).reduce((a, [, v]) => a + v, 0));
-  const dstr = (n) => new Date(now.getTime() - n * 86400000).toISOString().slice(0, 10);
-  const monthStart = today.slice(0, 7) + '-01';
-  const lm = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-  const lastMonthStart = lm.toISOString().slice(0, 10);
-  const lastMonthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().slice(0, 10);
-  const ranges = { today: [today, today], yesterday: [dstr(1), dstr(1)], d7: [dstr(6), today], d30: [dstr(29), today], month: [monthStart, today], lastMonth: [lastMonthStart, lastMonthEnd] };
 
   const bySource = {};
   const lastBalanceDate = Object.keys(history.balances || {}).sort().at(-1);
@@ -49,7 +61,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     const balances = (lastBalanceDate && history.balances[lastBalanceDate]?.[id]) || [];
     const balEntries = balances.map((b) => {
       const eur = toBase(b.amount, b.currency, fx);
-      if (eur == null) unconverted.add(b.currency);
+      if (eur == null) nichtUmgerechnet(b.currency, b.amount, null);
       return { ...b, eur };
     });
     bySource[id] = {
@@ -96,7 +108,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     for (const [month, byCur] of Object.entries(months)) {
       for (const [cur, amount] of Object.entries(byCur)) {
         const eur = toBase(amount, cur, fx);
-        if (eur == null) unconverted.add(cur);
+        if (eur == null) nichtUmgerechnet(cur, amount, null);
         payouts.push({ source: id, label: meta[id]?.label || id, month, amount, currency: cur, eur });
       }
     }
@@ -123,7 +135,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
         let sum = 0;
         for (const [cur, amt] of Object.entries(byCur)) {
           const v = toBase(amt, cur, fx);
-          if (v == null) unconverted.add(cur); else sum += v;
+          if (v == null) { if (!unconverted.has(String(cur).toUpperCase())) nichtUmgerechnet(cur, 0, null); } else sum += v;
         }
         eintrag.__daily[date] = round2((eintrag.__daily[date] || 0) + sum);
         proSrc.__daily[date] = round2((proSrc.__daily[date] || 0) + sum);
@@ -162,7 +174,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     payouts,
     accountsEur,
     openEur,
-    unconverted: [...unconverted],
+    unconverted: [...unconverted.values()].sort((a, b) => b.gesamt - a.gesamt),
     notify: latest?.notify || null,
   };
 }

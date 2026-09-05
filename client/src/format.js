@@ -16,6 +16,12 @@ export function fmtMoney(v, cur = 'EUR', digits = 2) {
   }
 }
 
+// Reine Zahl ohne Währungssymbol - für Währungen, die wir nicht umrechnen können.
+export function fmtZahl(v) {
+  if (v == null || Number.isNaN(v)) return '–';
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(v);
+}
+
 export function fmtDate(iso) {
   if (!iso) return '–';
   const d = new Date(iso);

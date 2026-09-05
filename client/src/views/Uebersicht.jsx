@@ -1,5 +1,5 @@
 import React from 'react';
-import { fmtMoney, fmtDate, fmtDay, fmtMonth, SOURCE_ORDER, SOURCE_COLORS } from '../format.js';
+import { fmtMoney, fmtZahl, fmtDate, fmtDay, fmtMonth, SOURCE_ORDER, SOURCE_COLORS } from '../format.js';
 
 function Kpi({ label, value, cur, hint }) {
   return (
@@ -73,9 +73,15 @@ export default function Uebersicht({ s }) {
       </div>
       <p className="hint">
         Summe = Werbung (AdMob, AdSense) + Abo-Umsatz {s.subsSource === 'revenuecat' ? 'laut RevenueCat (vor Store-Abzug)' : 'laut Store-Erlösen (App Store Sales + Play)'}. Schätzwerte, umgerechnet mit EZB-Kursen.
-        {s.unconverted?.length ? ` Nicht umrechenbar: ${s.unconverted.join(', ')}.` : ''}
-        {s.fxError ? ` Wechselkurse gerade nicht erreichbar (${s.fxError}).` : ''}
       </p>
+      {s.unconverted?.length > 0 && (
+        <p className="warn">
+          Nicht in {cur} umgerechnet und deshalb <b>nicht in der Summe enthalten</b>:{' '}
+          {s.unconverted.map((u) => `${fmtZahl(u.gesamt)} ${u.currency}${u.d30 && u.d30 !== u.gesamt ? ` (davon ${fmtZahl(u.d30)} in 30 Tagen)` : ''}`).join(', ')}.
+          {' '}Die EZB veröffentlicht für diese Währung keinen Kurs.
+        </p>
+      )}
+      {s.fxError && <p className="warn">Wechselkurse gerade nicht erreichbar ({s.fxError}).</p>}
 
       {!active.length && (
         <div className="panel">

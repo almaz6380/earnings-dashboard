@@ -147,6 +147,22 @@ test('App-Werte: neuer Abruf ersetzt den Tageswert', () => {
   assert.deepEqual(h.apps.admob['ca~11'].daily['2026-09-02'], { EUR: 3 });
 });
 
+test('Nicht umrechenbare Währungen: Betrag statt nur Kürzel', () => {
+  const h = emptyHistory();
+  // VND führt die EZB nicht - der Betrag darf nicht stillschweigend als 0 verschwinden.
+  mergeSource(h, 'appstore', { daily: [
+    { date: '2026-09-01', amount: 1250000, currency: 'VND' },
+    { date: '2026-09-01', amount: 4, currency: 'EUR' },
+  ] }, '2026-09-02');
+  mergeSource(h, 'admob', { daily: [{ date: '2020-01-05', amount: 300000, currency: 'VND' }] }, '2026-09-02');
+  const s = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z'));
+  const vnd = s.unconverted.find((u) => u.currency === 'VND');
+  assert.equal(vnd.gesamt, 1550000);
+  assert.equal(vnd.d30, 1250000); // der alte Tag von 2020 zählt nur in die Gesamtsumme
+  // Die umrechenbare Hälfte zählt weiter ganz normal mit.
+  assert.equal(s.bySource.appstore.yesterday, 4);
+});
+
 test('Verlauf beschneiden', () => {
   const h = emptyHistory();
   h.daily.admob = { '2020-01-01': { USD: 1 }, '2026-09-01': { USD: 1 } };
