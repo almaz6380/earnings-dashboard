@@ -118,7 +118,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
         appsByKey.set(key, eintrag);
       }
       if (name.length > eintrag.name.length) eintrag.name = name;
-      const proSrc = (eintrag.sources[id] ||= { id, label: meta[id]?.label || id, d30: 0, month: 0 });
+      const proSrc = (eintrag.sources[id] ||= { id, label: meta[id]?.label || id, __daily: {} });
       for (const [date, byCur] of Object.entries(app?.daily || {})) {
         let sum = 0;
         for (const [cur, amt] of Object.entries(byCur)) {
@@ -126,17 +126,25 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
           if (v == null) unconverted.add(cur); else sum += v;
         }
         eintrag.__daily[date] = round2((eintrag.__daily[date] || 0) + sum);
-        if (date >= ranges.d30[0] && date <= ranges.d30[1]) proSrc.d30 = round2(proSrc.d30 + sum);
-        if (date >= ranges.month[0] && date <= ranges.month[1]) proSrc.month = round2(proSrc.month + sum);
+        proSrc.__daily[date] = round2((proSrc.__daily[date] || 0) + sum);
       }
     }
   }
-  const apps = [...appsByKey.values()].map((a) => {
-    const spanne = (from, to) => round2(Object.entries(a.__daily).filter(([d]) => d >= from && d <= to).reduce((s, [, v]) => s + v, 0));
+  // Je App und je Quelle dieselben Zeiträume, damit die Anzeige zwischen 7 Tagen,
+  // 30 Tagen und Monat umschalten kann, ohne dass die Quellenzeile stehen bleibt.
+  const zeitraeume = (daily) => {
     const werte = {};
-    for (const [k, [von, bis]] of Object.entries(ranges)) werte[k] = spanne(von, bis);
-    return { key: a.key, name: a.name, ...werte, sources: Object.values(a.sources).sort((x, y) => y.d30 - x.d30) };
-  }).sort((a, b) => b.d30 - a.d30 || b.month - a.month || a.name.localeCompare(b.name));
+    for (const [k, [von, bis]] of Object.entries(ranges)) {
+      werte[k] = round2(Object.entries(daily).filter(([d]) => d >= von && d <= bis).reduce((s, [, v]) => s + v, 0));
+    }
+    return werte;
+  };
+  const apps = [...appsByKey.values()].map((a) => ({
+    key: a.key, name: a.name, ...zeitraeume(a.__daily),
+    sources: Object.values(a.sources)
+      .map(({ id, label, __daily }) => ({ id, label, ...zeitraeume(__daily) }))
+      .sort((x, y) => y.d30 - x.d30),
+  })).sort((a, b) => b.d30 - a.d30 || b.month - a.month || a.name.localeCompare(b.name));
 
   const accountsEur = round2(['wise', 'paypal'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
   const openEur = round2(['adsense'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));

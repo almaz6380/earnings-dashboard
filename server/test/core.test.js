@@ -116,6 +116,13 @@ test('App-Aufschlüsselung: gleiche App aus zwei Quellen wird eine Zeile', () =>
   const swaply = s.apps.find((a) => a.key === 'swaply');
   assert.equal(swaply.yesterday, 8.8); // 6 USD = 4,80 € + 4 €
   assert.deepEqual(swaply.sources.map((q) => q.id).sort(), ['admob', 'appstore']);
+  // Je Quelle stehen dieselben Zeiträume bereit wie für die App, damit die
+  // Anzeige zwischen 7 Tagen, 30 Tagen und Monat umschalten kann.
+  const admob = swaply.sources.find((q) => q.id === 'admob');
+  assert.equal(admob.yesterday, 4.8);
+  assert.equal(admob.d7, 4.8);
+  assert.equal(admob.d30, 4.8);
+  assert.equal(swaply.sources.find((q) => q.id === 'appstore').yesterday, 4);
   // sortiert nach 30-Tage-Summe
   assert.deepEqual(s.apps.map((a) => a.name), ['Swaply', 'Mahjong Royale']);
   // Sobald RevenueCat Tageswerte liefert, zählen die Store-Erlöse nicht mehr mit -
