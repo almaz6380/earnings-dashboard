@@ -104,6 +104,10 @@ Die Meldung geht nur beim Cron-Lauf raus, nicht beim Klick auf „Aktualisieren�
   aber nicht summiert.
 - **Verzug:** AdMob und AdSense 1–2 Tage, Apple Sales 1 Tag, Play und Apple Finance monatlich.
 - **Verlauf:** Tageswerte 2 Jahre, Kontostand-Snapshots 1 Jahr, alles in `history` im Speicher.
+- **Aufschlüsselung nach Apps** (Tab „Apps“): AdMob liefert sie je App, RevenueCat je Projekt, App Store Connect
+  je Titel, Google Play je Produkt. AdSense bleibt außen vor – das sind Webseiten, keine Apps. Gleiche App-Namen
+  aus verschiedenen Quellen (Werbung und Abos derselben App) landen in einer Zeile. Gezählt wird nur, was auch in
+  die Gesamtsumme geht, damit nichts doppelt erscheint.
 
 ## Sicherheit
 
@@ -122,5 +126,5 @@ server/   Express (lokal) + Handler, die auch als Vercel-Funktionen laufen
   collect.js Sammellauf, summary.js Kennzahlen, notify.js Meldung, fx.js Kurse
   auth.js Passwort/Cookie, crypto.js Token-Verschlüsselung, google/oauth.js Login
 api/      Vercel-Einstiege (nur Re-Exports)
-client/   React-Dashboard: Übersicht, Verlauf, Quellen
+client/   React-Dashboard: Übersicht, Apps, Verlauf, Quellen
 ```

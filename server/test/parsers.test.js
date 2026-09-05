@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 import { unzip } from '../zip.js';
 import { parseEarningsCsv, parseDate } from '../sources/playEarnings.js';
-import { sumSales, sumFinance, makeJwt } from '../sources/appstore.js';
+import { sumSales, sumFinance, makeJwt, salesByApp } from '../sources/appstore.js';
 import { parseReport } from '../sources/admob.js';
 import { parse as parseAdsense } from '../sources/adsense.js';
 import { chartToDaily, projects, mergeProjects, fetchData } from '../sources/revenuecat.js';
@@ -95,6 +95,39 @@ test('AdMob-Bericht: Micros -> Betrag, Datum normalisiert', () => {
   ]);
   assert.equal(r.currency, 'USD');
   assert.deepEqual(r.daily, [{ date: '2026-09-01', amount: 6.5, currency: 'USD' }]);
+});
+
+test('AdMob-Bericht: Aufschlüsselung nach Apps', () => {
+  const r = parseReport([
+    { header: { localizationSettings: { currencyCode: 'USD' } } },
+    { row: { dimensionValues: { DATE: { value: '20260901' }, APP: { value: 'ca-app-pub-1~11', displayLabel: 'Swaply' } }, metricValues: { ESTIMATED_EARNINGS: { microsValue: '4000000' } } } },
+    { row: { dimensionValues: { DATE: { value: '20260901' }, APP: { value: 'ca-app-pub-1~22', displayLabel: 'Mahjong Royale' } }, metricValues: { ESTIMATED_EARNINGS: { microsValue: '2500000' } } } },
+    { footer: { matchingRowCount: 2 } },
+  ]);
+  // Tagessumme entsteht aus den App-Zeilen
+  assert.deepEqual(r.daily, [{ date: '2026-09-01', amount: 6.5, currency: 'USD' }]);
+  assert.deepEqual(r.apps, [
+    { id: 'ca-app-pub-1~11', name: 'Swaply', date: '2026-09-01', amount: 4, currency: 'USD' },
+    { id: 'ca-app-pub-1~22', name: 'Mahjong Royale', date: '2026-09-01', amount: 2.5, currency: 'USD' },
+  ]);
+});
+
+test('Apple-Sales: Erlöse je App', () => {
+  const apps = salesByApp(fx('apple_sales.tsv'));
+  assert.ok(apps.length >= 1);
+  const usd = apps.find((a) => a.currency === 'USD');
+  assert.equal(usd.name, 'App');
+  assert.equal(usd.id, '123');
+  assert.equal(usd.amount, 8.97); // 3 x 2.99
+});
+
+test('Play-Earnings: Aufschlüsselung nach App', () => {
+  const r = parseEarningsCsv(fx('play_earnings.csv'));
+  assert.ok(r.apps.length >= 1);
+  const a = r.apps.find((x) => x.id === 'com.example.app');
+  assert.equal(a.name, 'Pro Abo');
+  assert.equal(a.currency, 'EUR');
+  assert.ok(a.amount > 0);
 });
 
 test('AdSense: Tageswerte und offenes Guthaben', () => {

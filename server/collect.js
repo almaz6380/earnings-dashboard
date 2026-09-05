@@ -6,13 +6,13 @@ import { SOURCES } from './sources/index.js';
 import { buildSummary } from './summary.js';
 import { sendDaily } from './notify.js';
 
-export const emptyHistory = () => ({ daily: {}, payouts: {}, balances: {}, sources: {} });
+export const emptyHistory = () => ({ daily: {}, payouts: {}, balances: {}, sources: {}, apps: {} });
 
 export async function runCollect({ notify = true } = {}) {
   const started = Date.now();
   const fx = await getRates();
   const history = (await loadJSON('history')) || emptyHistory();
-  history.daily ||= {}; history.payouts ||= {}; history.balances ||= {}; history.sources ||= {};
+  history.daily ||= {}; history.payouts ||= {}; history.balances ||= {}; history.sources ||= {}; history.apps ||= {};
   const today = new Date().toISOString().slice(0, 10);
   const results = {};
 
@@ -26,6 +26,7 @@ export async function runCollect({ notify = true } = {}) {
       const knownMonths = new Set(Object.keys(history.payouts[id] || {}));
       const data = await src.fetchData({ knownDates, knownMonths });
       mergeSource(history, id, data, today);
+      mergeApps(history, id, data, today);
       Object.assign(s, { status: 'ok', lastOk: new Date().toISOString(), lastError: null, asOf: data.asOf, note: data.note || null, extra: data.extra || {}, currency: data.currency });
       results[id] = { status: 'ok', ms: Date.now() - t0, days: data.daily?.length || 0 };
     } catch (e) {
@@ -69,10 +70,29 @@ export function mergeSource(history, id, data, today) {
   }
 }
 
+// Tageswerte je App und Quelle. Struktur: apps[quelle][appId] = { name, daily: { datum: { WÄHRUNG: betrag } } }
+export function mergeApps(history, id, data, today) {
+  if (!data.apps?.length) return;
+  const proQuelle = (history.apps[id] ||= {});
+  for (const row of data.apps) {
+    if (!row?.date || typeof row.amount !== 'number' || !row.currency || !row.id) continue;
+    const app = (proQuelle[row.id] ||= { name: row.name || row.id, daily: {} });
+    if (row.name) app.name = row.name;
+    const cur = row.currency.toUpperCase();
+    // Wie bei mergeSource: ein neuer Abruf ersetzt den Tageswert, statt ihn zu verdoppeln.
+    if (!app.daily[row.date] || app.daily[row.date].__fresh !== today) app.daily[row.date] = { __fresh: today };
+    app.daily[row.date][cur] = Math.round(((app.daily[row.date][cur] || 0) + row.amount) * 100) / 100;
+  }
+  for (const app of Object.values(proQuelle)) for (const v of Object.values(app.daily)) delete v.__fresh;
+}
+
 // Verlauf begrenzen: Tageswerte 2 Jahre, Guthaben-Snapshots 1 Jahr.
 export function pruneHistory(history, now = new Date()) {
   const cutDaily = new Date(now.getTime() - 730 * 86400000).toISOString().slice(0, 10);
   const cutBal = new Date(now.getTime() - 365 * 86400000).toISOString().slice(0, 10);
   for (const d of Object.values(history.daily)) for (const k of Object.keys(d)) if (k < cutDaily) delete d[k];
+  for (const quelle of Object.values(history.apps || {})) {
+    for (const app of Object.values(quelle)) for (const k of Object.keys(app.daily)) if (k < cutDaily) delete app.daily[k];
+  }
   for (const k of Object.keys(history.balances)) if (k < cutBal) delete history.balances[k];
 }

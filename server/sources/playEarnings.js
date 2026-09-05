@@ -20,7 +20,7 @@ export async function fetchData({ months = 2 } = {}) {
   const files = (list.items || []).filter((f) => /earnings_\d{6}/.test(f.name)).sort((a, b) => a.name.localeCompare(b.name)).slice(-months);
   if (!files.length) return { currency: null, asOf: new Date().toISOString(), daily: [], payouts: [], balance: null, extra: {}, note: 'Noch kein Earnings-Bericht im Bucket.' };
 
-  const daily = [], payouts = [];
+  const daily = [], payouts = [], apps = [];
   let currency = null;
   for (const f of files) {
     const zip = await getBuffer(`https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(f.name)}?alt=media`, auth);
@@ -30,10 +30,11 @@ export async function fetchData({ months = 2 } = {}) {
       const r = parseEarningsCsv(entry.data.toString('utf8'));
       currency = r.currency || currency;
       daily.push(...r.daily);
+      apps.push(...r.apps);
       payouts.push({ month, amount: r.total, currency: r.currency, label: `Play-Auszahlung ${month}` });
     }
   }
-  return { currency, asOf: files.at(-1).updated || new Date().toISOString(), daily, payouts, balance: null, extra: {},
+  return { currency, asOf: files.at(-1).updated || new Date().toISOString(), daily, payouts, apps, balance: null, extra: {},
     note: 'Earnings-Bericht entsteht Anfang des Folgemonats und entspricht der Auszahlung.' };
 }
 
@@ -42,6 +43,7 @@ const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7,
 export function parseEarningsCsv(text) {
   const rows = toObjects(parseDelimited(text));
   const perDay = {};
+  const perApp = new Map();
   let currency = null, total = 0;
   for (const r of rows) {
     const amt = parseNumber(r['Amount (Merchant Currency)']);
@@ -50,9 +52,18 @@ export function parseEarningsCsv(text) {
     const date = parseDate(r['Transaction Date']);
     if (date) perDay[date] = (perDay[date] || 0) + amt;
     total += amt;
+    const name = (r['Product Title'] || '').trim();
+    const id = (r['Product id'] || name).trim();
+    if (date && name) {
+      const key = `${id}|${date}`;
+      const vorher = perApp.get(key) || { id, name, date, amount: 0, currency };
+      vorher.amount = Math.round((vorher.amount + amt) * 100) / 100;
+      vorher.currency = currency;
+      perApp.set(key, vorher);
+    }
   }
   const daily = Object.entries(perDay).sort().map(([date, amount]) => ({ date, amount: Math.round(amount * 100) / 100, currency }));
-  return { currency, total: Math.round(total * 100) / 100, daily };
+  return { currency, total: Math.round(total * 100) / 100, daily, apps: [...perApp.values()] };
 }
 
 // "Jul 1, 2026" oder "2026-07-01" -> "2026-07-01"

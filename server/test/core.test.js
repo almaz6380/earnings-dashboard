@@ -9,7 +9,7 @@ process.env.BASE_CURRENCY = 'EUR';
 const { makeToken, verifyToken, parseCookies, cookieHeader, COOKIE } = await import('../auth.js');
 const { encrypt, decrypt } = await import('../crypto.js');
 const { toBase } = await import('../fx.js');
-const { mergeSource, pruneHistory, emptyHistory } = await import('../collect.js');
+const { mergeSource, mergeApps, pruneHistory, emptyHistory } = await import('../collect.js');
 const { buildSummary } = await import('../summary.js');
 const { formatDaily } = await import('../notify.js');
 const { makeState, verifyState } = await import('../google/oauth.js');
@@ -103,6 +103,41 @@ test('RevenueCat-Tageswerte haben Vorrang vor Store-Erlösen', () => {
   assert.equal(s.subsSource, 'revenuecat');
   assert.equal(s.kpis.yesterday, 60); // admob 10 + rc 50
   assert.equal(s.bySource.appstore.countsInTotal, false);
+});
+
+test('App-Aufschlüsselung: gleiche App aus zwei Quellen wird eine Zeile', () => {
+  const h = sampleHistory();
+  mergeApps(h, 'admob', { apps: [
+    { id: 'ca~11', name: 'Swaply', date: '2026-09-01', amount: 6, currency: 'USD' },
+    { id: 'ca~22', name: 'Mahjong Royale', date: '2026-09-01', amount: 5, currency: 'EUR' },
+  ] }, '2026-09-02');
+  mergeApps(h, 'appstore', { apps: [{ id: '123', name: 'Swaply ', date: '2026-09-01', amount: 4, currency: 'EUR' }] }, '2026-09-02');
+  const s = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z'));
+  const swaply = s.apps.find((a) => a.key === 'swaply');
+  assert.equal(swaply.yesterday, 8.8); // 6 USD = 4,80 € + 4 €
+  assert.deepEqual(swaply.sources.map((q) => q.id).sort(), ['admob', 'appstore']);
+  // sortiert nach 30-Tage-Summe
+  assert.deepEqual(s.apps.map((a) => a.name), ['Swaply', 'Mahjong Royale']);
+  // Sobald RevenueCat Tageswerte liefert, zählen die Store-Erlöse nicht mehr mit -
+  // dann darf die App-Aufschlüsselung sie auch nicht doppelt zeigen.
+  mergeSource(h, 'revenuecat', { daily: [{ date: '2026-09-01', amount: 50, currency: 'EUR' }] }, '2026-09-02');
+  const s2 = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z'));
+  const swaply2 = s2.apps.find((a) => a.key === 'swaply');
+  assert.deepEqual(swaply2.sources.map((q) => q.id), ['admob']);
+  assert.equal(swaply2.yesterday, 4.8);
+});
+
+test('App-Werte: neuer Abruf ersetzt den Tageswert', () => {
+  const h = emptyHistory();
+  mergeApps(h, 'admob', { apps: [{ id: 'ca~11', name: 'Swaply', date: '2026-09-01', amount: 6, currency: 'EUR' }] }, '2026-09-02');
+  mergeApps(h, 'admob', { apps: [{ id: 'ca~11', name: 'Swaply', date: '2026-09-01', amount: 9, currency: 'EUR' }] }, '2026-09-03');
+  assert.deepEqual(h.apps.admob['ca~11'].daily['2026-09-01'], { EUR: 9 });
+  // zwei Zeilen im selben Lauf werden dagegen summiert
+  mergeApps(h, 'admob', { apps: [
+    { id: 'ca~11', name: 'Swaply', date: '2026-09-02', amount: 1, currency: 'EUR' },
+    { id: 'ca~11', name: 'Swaply', date: '2026-09-02', amount: 2, currency: 'EUR' },
+  ] }, '2026-09-03');
+  assert.deepEqual(h.apps.admob['ca~11'].daily['2026-09-02'], { EUR: 3 });
 });
 
 test('Verlauf beschneiden', () => {

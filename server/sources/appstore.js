@@ -36,7 +36,7 @@ async function report(params) {
 
 export async function fetchData({ days = 14, knownDates = new Set(), knownMonths = new Set() } = {}) {
   const vendor = process.env.ASC_VENDOR_NUMBER;
-  const daily = [], payouts = [], errors = [];
+  const daily = [], payouts = [], apps = [], errors = [];
   let currency = null;
 
   // Tagesverkäufe: fehlende Tage der letzten `days` Tage (Bericht kommt am Folgetag)
@@ -49,6 +49,7 @@ export async function fetchData({ days = 14, knownDates = new Set(), knownMonths
       const sums = sumSales(tsv);
       for (const [cur, amount] of Object.entries(sums)) { daily.push({ date, amount, currency: cur }); currency = currency || cur; }
       if (!Object.keys(sums).length) daily.push({ date, amount: 0, currency: currency || 'USD' });
+      for (const a of salesByApp(tsv)) apps.push({ ...a, date });
     } catch (e) {
       if (e.status === 404) daily.push({ date, amount: 0, currency: currency || 'USD' });
       else errors.push(`${date}: ${e.message.slice(0, 100)}`);
@@ -68,7 +69,7 @@ export async function fetchData({ days = 14, knownDates = new Set(), knownMonths
       if (e.status !== 404) errors.push(`Finanzbericht ${month}: ${e.message.slice(0, 100)}`);
     }
   }
-  return { currency: currency || 'USD', asOf: new Date().toISOString(), daily, payouts, balance: null, extra: {},
+  return { currency: currency || 'USD', asOf: new Date().toISOString(), daily, payouts, apps, balance: null, extra: {},
     note: [errors.length ? `Fehler: ${errors.join(' | ')}` : null, 'Apple rechnet in Fiskalmonaten ab; Finanzbericht ca. 5 Tage nach Monatsende.'].filter(Boolean).join(' ') };
 }
 
@@ -82,6 +83,23 @@ export function sumSales(tsv) {
     out[cur] = Math.round(((out[cur] || 0) + units * proceeds) * 100) / 100;
   }
   return out;
+}
+
+// Sales-Report je App: Titel als Name, SKU oder Apple-ID als Kennung.
+export function salesByApp(tsv) {
+  const proApp = new Map();
+  for (const r of toObjects(parseDelimited(tsv, '\t'))) {
+    const units = parseNumber(r['Units']), proceeds = parseNumber(r['Developer Proceeds']);
+    const cur = (r['Currency of Proceeds'] || '').trim();
+    const name = (r['Title'] || '').trim();
+    const id = (r['Apple Identifier'] || r['SKU'] || name).trim();
+    if (!cur || !name || Number.isNaN(units) || Number.isNaN(proceeds)) continue;
+    const key = `${id}|${cur}`;
+    const vorher = proApp.get(key) || { id, name, currency: cur, amount: 0 };
+    vorher.amount = Math.round((vorher.amount + units * proceeds) * 100) / 100;
+    proApp.set(key, vorher);
+  }
+  return [...proApp.values()];
 }
 
 // Finanzbericht: Summe "Extended Partner Share" je "Partner Share Currency"

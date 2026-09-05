@@ -86,3 +86,4 @@ tr:last-child td { border-bottom: none; }
   nav.tabs button { padding: 7px 10px; font-size: 13px; }
   .kpi-value { font-size: 20px; }
 }
+.nowrap { white-space: nowrap; }

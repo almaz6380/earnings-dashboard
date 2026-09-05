@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Uebersicht from './views/Uebersicht.jsx';
 import Verlauf from './views/Verlauf.jsx';
+import Apps from './views/Apps.jsx';
 import Quellen from './views/Quellen.jsx';
 import { fmtDate } from './format.js';
 
 const TABS = [
   { id: 'uebersicht', label: 'Übersicht' },
+  { id: 'apps', label: 'Apps' },
   { id: 'verlauf', label: 'Verlauf' },
   { id: 'quellen', label: 'Quellen' },
 ];
@@ -107,6 +109,7 @@ export default function App() {
       {!state ? <p className="hint">Lade Daten …</p> : (
         <>
           {tab === 'uebersicht' && <Uebersicht s={state} />}
+          {tab === 'apps' && <Apps s={state} />}
           {tab === 'verlauf' && <Verlauf s={state} />}
           {tab === 'quellen' && <Quellen s={state} status={status} onChanged={load} />}
         </>

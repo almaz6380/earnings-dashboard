@@ -6,6 +6,9 @@ const ADS = ['admob', 'adsense'];
 const SUBS_ESTIMATE = 'revenuecat';
 const STORES = ['appstore', 'play'];
 
+// Namen gleicher Apps aus verschiedenen Quellen zusammenführen: Klein schreiben, alles außer Buchstaben/Ziffern weg.
+export const appKey = (name) => String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+
 export function buildSummary(history, fx, latest = null, now = new Date()) {
   const today = now.toISOString().slice(0, 10);
   const meta = Object.fromEntries(SOURCES.map((s) => [s.meta.id, s.meta]));
@@ -100,6 +103,41 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
   }
   payouts.sort((a, b) => b.month.localeCompare(a.month) || a.source.localeCompare(b.source));
 
+
+  // Aufschlüsselung nach Apps: nur Quellen, die auch in die Gesamtsumme zählen (sonst doppelt).
+  const appsByKey = new Map();
+  for (const [id, proQuelle] of Object.entries(history.apps || {})) {
+    if (!earnedIds.includes(id)) continue;
+    for (const [appId, app] of Object.entries(proQuelle || {})) {
+      const name = (app?.name || appId).trim();
+      const key = appKey(name);
+      if (!key) continue;
+      let eintrag = appsByKey.get(key);
+      if (!eintrag) {
+        eintrag = { key, name, sources: {}, __daily: {} };
+        appsByKey.set(key, eintrag);
+      }
+      if (name.length > eintrag.name.length) eintrag.name = name;
+      const proSrc = (eintrag.sources[id] ||= { id, label: meta[id]?.label || id, d30: 0, month: 0 });
+      for (const [date, byCur] of Object.entries(app?.daily || {})) {
+        let sum = 0;
+        for (const [cur, amt] of Object.entries(byCur)) {
+          const v = toBase(amt, cur, fx);
+          if (v == null) unconverted.add(cur); else sum += v;
+        }
+        eintrag.__daily[date] = round2((eintrag.__daily[date] || 0) + sum);
+        if (date >= ranges.d30[0] && date <= ranges.d30[1]) proSrc.d30 = round2(proSrc.d30 + sum);
+        if (date >= ranges.month[0] && date <= ranges.month[1]) proSrc.month = round2(proSrc.month + sum);
+      }
+    }
+  }
+  const apps = [...appsByKey.values()].map((a) => {
+    const spanne = (from, to) => round2(Object.entries(a.__daily).filter(([d]) => d >= from && d <= to).reduce((s, [, v]) => s + v, 0));
+    const werte = {};
+    for (const [k, [von, bis]] of Object.entries(ranges)) werte[k] = spanne(von, bis);
+    return { key: a.key, name: a.name, ...werte, sources: Object.values(a.sources).sort((x, y) => y.d30 - x.d30) };
+  }).sort((a, b) => b.d30 - a.d30 || b.month - a.month || a.name.localeCompare(b.name));
+
   const accountsEur = round2(['wise', 'paypal'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
   const openEur = round2(['adsense'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
 
@@ -110,6 +148,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     kpis,
     subsSource: hasRcDaily ? 'revenuecat' : 'stores',
     bySource,
+    apps,
     series,
     monthly,
     payouts,

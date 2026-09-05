@@ -76,6 +76,8 @@ export async function fetchData({ days = 60, fetchJSON = getJSON } = {}) {
 // Ergebnisse mehrerer Projekte zusammenführen.
 export function mergeProjects(ergebnisse, fehler = [], hinweise = []) {
   const daily = ergebnisse.flatMap((r) => r.daily);
+  // Jedes Projekt zählt als eigene App, damit die Aufschlüsselung greift.
+  const apps = ergebnisse.flatMap((r) => r.daily.map((d) => ({ id: r.label, name: r.label, ...d })));
   const currency = ergebnisse[0].currency;
   const gleicheWaehrung = ergebnisse.every((r) => r.currency === currency);
 
@@ -98,6 +100,7 @@ export function mergeProjects(ergebnisse, fehler = [], hinweise = []) {
     currency: gleicheWaehrung ? currency : null,
     asOf: new Date().toISOString(),
     daily,
+    apps,
     balance: null,
     balances,
     extra: {
