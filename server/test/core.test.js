@@ -161,6 +161,11 @@ test('Nicht umrechenbare Währungen: Betrag statt nur Kürzel', () => {
   assert.equal(vnd.d30, 1250000); // der alte Tag von 2020 zählt nur in die Gesamtsumme
   // Die umrechenbare Hälfte zählt weiter ganz normal mit.
   assert.equal(s.bySource.appstore.yesterday, 4);
+
+  // Eine Währung ohne Erlös (Gratis-Downloads) ist keine Lücke und wird nicht gemeldet.
+  const h2 = emptyHistory();
+  mergeSource(h2, 'appstore', { daily: [{ date: '2026-09-01', amount: 0, currency: 'VND' }] }, '2026-09-02');
+  assert.deepEqual(buildSummary(h2, FX, null, new Date('2026-09-02T12:00:00Z')).unconverted, []);
 });
 
 test('Verlauf beschneiden', () => {

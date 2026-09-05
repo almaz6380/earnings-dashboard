@@ -174,7 +174,9 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     payouts,
     accountsEur,
     openEur,
-    unconverted: [...unconverted.values()].sort((a, b) => b.gesamt - a.gesamt),
+    // Nur melden, wo tatsächlich Geld fehlt. Eine Währung mit 0 (etwa Gratis-Downloads
+    // in Vietnam) als Warnung anzuzeigen, behauptet eine Lücke, die es nicht gibt.
+    unconverted: [...unconverted.values()].filter((u) => u.gesamt !== 0 || u.d30 !== 0).sort((a, b) => b.gesamt - a.gesamt),
     notify: latest?.notify || null,
   };
 }

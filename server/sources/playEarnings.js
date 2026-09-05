@@ -12,18 +12,32 @@ export function configured() {
   return !!(process.env.PLAY_GCS_BUCKET && process.env.GOOGLE_CLIENT_ID);
 }
 
-export async function fetchData({ months = 2 } = {}) {
+// fetchJSON/fetchBuffer/holeToken sind einspeisbar, damit Tests ohne Netz laufen (wie in revenuecat.js).
+export async function fetchData({ months = 2, fetchJSON = getJSON, fetchBuffer = getBuffer, holeToken = getAccessToken } = {}) {
   const bucket = process.env.PLAY_GCS_BUCKET.replace(/^gs:\/\//, '').replace(/\/.*$/, '');
-  const token = await getAccessToken();
+  const token = await holeToken();
   const auth = { headers: { authorization: `Bearer ${token}` } };
-  const list = await getJSON(`https://storage.googleapis.com/storage/v1/b/${bucket}/o?prefix=earnings/&fields=items(name,updated)`, auth);
+  const leer = (note) => ({ currency: null, asOf: new Date().toISOString(), daily: [], payouts: [], apps: [], balance: null, extra: {}, note });
+
+  let list;
+  try {
+    list = await fetchJSON(`https://storage.googleapis.com/storage/v1/b/${bucket}/o?prefix=earnings/&fields=items(name,updated)`, auth);
+  } catch (e) {
+    // Solange es keinen einzigen Finanzbericht gab, legt Google den Bucket gar nicht erst an.
+    // Das ist kein Fehler, sondern ein "noch nichts da" - sonst stünde die Quelle dauerhaft auf Rot.
+    // Ein 404 hat zwei mögliche Ursachen, die von außen nicht zu unterscheiden sind:
+    // der Bucket existiert noch nicht (kein Play-Umsatz), oder der Name stimmt nicht.
+    // Beides ist kein Grund, die Quelle dauerhaft auf Rot zu stellen - aber im Hinweis stehen beide.
+    if (/ -> 404:/.test(e.message)) return leer(`Kein Earnings-Bericht abrufbar: den Bucket "${bucket}" gibt es nicht. Entweder hat Google ihn noch nicht angelegt (er entsteht erst mit dem ersten Play-Umsatz aus bezahlten Apps, In-App-Käufen oder Abos - Werbeeinnahmen laufen über AdMob), oder der Name in PLAY_GCS_BUCKET stimmt nicht.`);
+    throw e;
+  }
   const files = (list.items || []).filter((f) => /earnings_\d{6}/.test(f.name)).sort((a, b) => a.name.localeCompare(b.name)).slice(-months);
-  if (!files.length) return { currency: null, asOf: new Date().toISOString(), daily: [], payouts: [], balance: null, extra: {}, note: 'Noch kein Earnings-Bericht im Bucket.' };
+  if (!files.length) return leer('Noch kein Earnings-Bericht im Bucket. Google erstellt ihn Anfang des Folgemonats, sobald über Google Play Geld eingenommen wurde.');
 
   const daily = [], payouts = [], apps = [];
   let currency = null;
   for (const f of files) {
-    const zip = await getBuffer(`https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(f.name)}?alt=media`, auth);
+    const zip = await fetchBuffer(`https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(f.name)}?alt=media`, auth);
     const month = f.name.match(/earnings_(\d{4})(\d{2})/).slice(1).join('-');
     for (const entry of unzip(zip)) {
       if (!/\.csv$/i.test(entry.name)) continue;

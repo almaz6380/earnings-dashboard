@@ -6,7 +6,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 import { unzip } from '../zip.js';
-import { parseEarningsCsv, parseDate } from '../sources/playEarnings.js';
+import { parseEarningsCsv, parseDate, fetchData as playFetch } from '../sources/playEarnings.js';
 import { sumSales, sumFinance, makeJwt, salesByApp, reportUrl, appleFehler, zusammenfassen } from '../sources/appstore.js';
 import { parseReport } from '../sources/admob.js';
 import { parse as parseAdsense } from '../sources/adsense.js';
@@ -40,6 +40,28 @@ test('Play-Earnings: Tagessummen und Monatsauszahlung', () => {
   assert.equal(parseDate('Sep 3, 2026'), '2026-09-03');
   assert.equal(parseDate('2026-09-03'), '2026-09-03');
   assert.equal(parseDate('Quatsch'), null);
+});
+
+test('Play: fehlender Bucket ist kein Fehler, sondern "noch nichts da"', async () => {
+  process.env.PLAY_GCS_BUCKET = 'pubsite_prod_rev_0000000000000000000';
+  const holeToken = async () => 'test-token';
+  const vierNullVier = async () => {
+    throw new Error('GET https://storage.googleapis.com/storage/v1/b/pubsite_prod_rev_0/o -> 404: {"error":{"code":404}}');
+  };
+  const r = await playFetch({ holeToken, fetchJSON: vierNullVier });
+  assert.deepEqual(r.daily, []);
+  assert.deepEqual(r.payouts, []);
+  // Der Hinweis nennt beide möglichen Ursachen und den geprüften Bucket-Namen.
+  assert.match(r.note, /gibt es nicht/);
+  assert.match(r.note, /pubsite_prod_rev_0000000000000000000/);
+  assert.match(r.note, /PLAY_GCS_BUCKET/);
+
+  // Ein leerer, aber vorhandener Bucket ist dagegen eindeutig: nur noch kein Bericht.
+  const leer = await playFetch({ holeToken, fetchJSON: async () => ({ items: [] }) });
+  assert.match(leer.note, /Noch kein Earnings-Bericht im Bucket/);
+
+  // Alles andere bleibt ein echter Fehler - eine fehlende Berechtigung darf nicht durchrutschen.
+  await assert.rejects(() => playFetch({ holeToken, fetchJSON: async () => { throw new Error('GET … -> 403: kein Zugriff'); } }), /403/);
 });
 
 test('ZIP entpacken (Store und Deflate)', () => {
