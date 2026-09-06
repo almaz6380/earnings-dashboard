@@ -82,21 +82,17 @@ export default function Uebersicht({ s }) {
     <>
       <div className="hero">
         <div className="hero-top">
-          <div>
-            <div className="hero-label">Letzte 30 Tage</div>
-            <div className="hero-value">{fmtMoney(k.d30, cur)}</div>
+          <div title={letzterTagTitle}>
+            <div className="hero-label">{s.lastDayDate ? `Letzter Tag · ${fmtDay(s.lastDayDate).slice(0, 6)}` : 'Letzter Tag'}</div>
+            <div className="hero-value">{s.lastDayDate ? fmtMoney(k.lastDay, cur) : '–'}</div>
+            {s.lastDayFehlend?.length > 0 && <div className="hint small" style={{ marginTop: 6 }}>ohne {s.lastDayFehlend.join(', ')} – noch keine Meldung</div>}
           </div>
           <div className="hero-side">
-            <div className="lbl">Vormonat</div>
-            <div className="val">{fmtMoney(k.lastMonth, cur)}</div>
+            <div className="lbl">30 Tage</div>
+            <div className="val">{fmtMoney(k.d30, cur)}</div>
           </div>
         </div>
         <div className="mini">
-          <div title={letzterTagTitle}>
-            <div className="lbl">Letzter Tag</div>
-            <div className="val">{s.lastDayDate ? fmtMoney(k.lastDay, cur) : '–'}</div>
-            <div className="lbl sub">{s.lastDayDate ? fmtDay(s.lastDayDate).slice(0, 6) : 'noch keine Meldung'}{s.lastDayFehlend?.length ? ' *' : ''}</div>
-          </div>
           <div>
             <div className="lbl">7 Tage</div>
             <div className="val">{fmtMoney(k.d7, cur)}</div>
@@ -104,6 +100,10 @@ export default function Uebersicht({ s }) {
           <div>
             <div className="lbl">Monat</div>
             <div className="val">{fmtMoney(k.month, cur)}</div>
+          </div>
+          <div>
+            <div className="lbl">Vormonat</div>
+            <div className="val">{fmtMoney(k.lastMonth, cur)}</div>
           </div>
         </div>
       </div>
