@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { fmtMoney, SOURCE_COLORS } from '../format.js';
+import AppIcon from '../AppIcon.jsx';
 
 const RANGES = [
   { id: 'd7', label: '7 Tage' },
@@ -89,13 +90,18 @@ export default function Apps({ s }) {
               {apps.map((a) => (
                 <tr key={a.key}>
                   <td>
-                    <div>{a.name}</div>
-                    <div className="hint small nowrap">
-                      {a.sources.map((q) => (
-                        <span key={q.id} title={`${q.label}: ${fmtMoney(q[range], cur)} · ${rangeLabel}`}>
-                          <span className="dot" style={{ background: SOURCE_COLORS[q.id] || 'var(--muted)' }} />{q.label}{' '}
-                        </span>
-                      ))}
+                    <div className="appzeile">
+                      <AppIcon src={a.icon} name={a.name} color={SOURCE_COLORS[a.sources[0]?.id]} size={32} />
+                      <div>
+                        <div>{a.name}</div>
+                        <div className="hint small nowrap">
+                          {a.sources.map((q) => (
+                          <span key={q.id} title={`${q.label}: ${fmtMoney(q[range], cur)} · ${rangeLabel}`}>
+                            <span className="dot" style={{ background: SOURCE_COLORS[q.id] || 'var(--muted)' }} />{q.label}{' '}
+                          </span>
+                        ))}
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td>{fmtMoney(a.yesterday, cur)}</td>

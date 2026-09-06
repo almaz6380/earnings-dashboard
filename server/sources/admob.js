@@ -11,6 +11,35 @@ export function configured() {
 
 const dateObj = (d) => ({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() });
 
+// Der Bericht kennt nur die AdMob-App-ID. Welche Store-App dahintersteckt (und damit
+// das Icon), steht in der App-Liste. Gleicher Scope, kein neuer Zugang nötig.
+export function storeInfoAusApps(json) {
+  const out = {};
+  for (const app of json?.apps || []) {
+    const storeId = app.linkedAppInfo?.appStoreId;
+    if (!app.appId || !storeId) continue;
+    const eintrag = { storeId, platform: app.platform === 'IOS' ? 'ios' : 'android' };
+    out[app.appId] = eintrag;
+    // Zusätzlich unter dem Teil nach der Tilde ablegen: Bericht und App-Liste sollten
+    // dieselbe Schreibweise verwenden - täten sie es nicht, fände sich stillschweigend
+    // kein Icon. Das hier kann nur einen Treffer hinzufügen, nie einen verhindern.
+    const kurz = app.appId.split('~')[1];
+    if (kurz) out[kurz] ||= eintrag;
+  }
+  return out;
+}
+
+// Zuordnung nachschlagen, beide Schreibweisen versuchen.
+export const zuStore = (store, appId) => store[appId] || store[String(appId).split('~')[1]] || {};
+
+async function storeInfo(pub, fetchJSON) {
+  try {
+    return storeInfoAusApps(await fetchJSON(`https://admob.googleapis.com/v1/accounts/${pub}/apps?pageSize=200`));
+  } catch {
+    return {}; // Ohne Zuordnung fehlen nur die Icons - der Bericht zählt weiter.
+  }
+}
+
 export async function fetchData({ days = 60 } = {}) {
   const pub = process.env.ADMOB_PUBLISHER_ID.replace(/^accounts\//, '');
   const body = {
@@ -21,14 +50,17 @@ export async function fetchData({ days = 60 } = {}) {
       sortConditions: [{ dimension: 'DATE', order: 'ASCENDING' }],
     },
   };
-  const res = await googleFetch(`https://admob.googleapis.com/v1/accounts/${pub}/networkReport:generate`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
-  });
-  return parseReport(res);
+  const [res, store] = await Promise.all([
+    googleFetch(`https://admob.googleapis.com/v1/accounts/${pub}/networkReport:generate`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    }),
+    storeInfo(pub, googleFetch),
+  ]);
+  return parseReport(res, store);
 }
 
 // Verarbeitet Antworten mit und ohne APP-Dimension. Ohne APP entfällt die Aufschlüsselung.
-export function parseReport(res) {
+export function parseReport(res, store = {}) {
   const parts = Array.isArray(res) ? res : [res];
   const header = parts.find((p) => p.header)?.header || {};
   const currency = header.localizationSettings?.currencyCode || 'USD';
@@ -43,7 +75,7 @@ export function parseReport(res) {
     const amount = Number(row.metricValues?.ESTIMATED_EARNINGS?.microsValue ?? 0) / 1e6;
     proTag[date] = round2((proTag[date] || 0) + amount);
     const app = row.dimensionValues?.APP;
-    if (app) apps.push({ id: app.value, name: app.displayLabel || app.value, date, amount, currency });
+    if (app) apps.push({ id: app.value, name: app.displayLabel || app.value, date, amount, currency, ...zuStore(store, app.value) });
   }
   const daily = Object.entries(proTag).sort().map(([date, amount]) => ({ date, amount, currency }));
   return { currency, asOf: new Date().toISOString(), daily, apps, balance: null, extra: {}, note: 'AdMob meldet mit 1–2 Tagen Verzug; Guthaben = Summe seit letzter Auszahlung.' };

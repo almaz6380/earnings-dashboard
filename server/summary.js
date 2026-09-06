@@ -143,10 +143,12 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
       if (!key) continue;
       let eintrag = appsByKey.get(key);
       if (!eintrag) {
-        eintrag = { key, name, sources: {}, __daily: {} };
+        eintrag = { key, name, icon: null, sources: {}, __daily: {} };
         appsByKey.set(key, eintrag);
       }
       if (name.length > eintrag.name.length) eintrag.name = name;
+      // Dieselbe App kann aus mehreren Quellen kommen; das erste gefundene Icon genügt.
+      if (!eintrag.icon && app?.icon) eintrag.icon = app.icon;
       const proSrc = (eintrag.sources[id] ||= { id, label: meta[id]?.label || id, __daily: {} });
       for (const [date, byCur] of Object.entries(app?.daily || {})) {
         let sum = 0;
@@ -169,7 +171,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     return werte;
   };
   const apps = [...appsByKey.values()].map((a) => ({
-    key: a.key, name: a.name, ...zeitraeume(a.__daily),
+    key: a.key, name: a.name, icon: a.icon || null, ...zeitraeume(a.__daily),
     sources: Object.values(a.sources)
       .map(({ id, label, __daily }) => ({ id, label, ...zeitraeume(__daily) }))
       .sort((x, y) => y.d30 - x.d30),

@@ -4,6 +4,7 @@ import { loadJSON, saveJSON } from './store.js';
 import { getRates } from './fx.js';
 import { SOURCES } from './sources/index.js';
 import { buildSummary } from './summary.js';
+import { ergaenzeIcons } from './icons.js';
 import { sendDaily } from './notify.js';
 
 export const emptyHistory = () => ({ daily: {}, payouts: {}, balances: {}, sources: {}, apps: {} });
@@ -34,6 +35,9 @@ export async function runCollect({ notify = true } = {}) {
       results[id] = { status: 'error', error: e.message.slice(0, 400), ms: Date.now() - t0 };
     }
   }
+
+  // Icons erst nach allen Quellen: braucht die gesammelten Store-Kennungen.
+  try { await ergaenzeIcons(history); } catch { /* ohne Icons ist der Lauf trotzdem gültig */ }
 
   pruneHistory(history);
   await saveJSON('history', history);
@@ -78,6 +82,8 @@ export function mergeApps(history, id, data, today) {
     if (!row?.date || typeof row.amount !== 'number' || !row.currency || !row.id) continue;
     const app = (proQuelle[row.id] ||= { name: row.name || row.id, daily: {} });
     if (row.name) app.name = row.name;
+    // Store-Kennung merken, damit das Icon später gefunden werden kann.
+    if (row.platform && row.storeId) { app.platform = row.platform; app.storeId = row.storeId; }
     const cur = row.currency.toUpperCase();
     // Wie bei mergeSource: ein neuer Abruf ersetzt den Tageswert, statt ihn zu verdoppeln.
     if (!app.daily[row.date] || app.daily[row.date].__fresh !== today) app.daily[row.date] = { __fresh: today };

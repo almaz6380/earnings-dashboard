@@ -116,7 +116,8 @@ export function salesByApp(tsv) {
     const id = (r['Apple Identifier'] || r['SKU'] || name).trim();
     if (!cur || !name || Number.isNaN(units) || Number.isNaN(proceeds)) continue;
     const key = `${id}|${cur}`;
-    const vorher = proApp.get(key) || { id, name, currency: cur, amount: 0 };
+    // Die Apple-Kennung ist rein numerisch; nur damit findet man das Icon im Store.
+    const vorher = proApp.get(key) || { id, name, currency: cur, amount: 0, ...(/^\d+$/.test(id) ? { platform: 'ios', storeId: id } : {}) };
     vorher.amount = Math.round((vorher.amount + units * proceeds) * 100) / 100;
     proApp.set(key, vorher);
   }

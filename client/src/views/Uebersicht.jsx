@@ -1,5 +1,6 @@
 import React from 'react';
 import { fmtMoney, fmtZahl, fmtDay, fmtMonth, SOURCE_ORDER, SOURCE_COLORS } from '../format.js';
+import AppIcon from '../AppIcon.jsx';
 
 // Auf Amber ist dunkle Schrift lesbar, auf den anderen Quellenfarben weiße.
 const DUNKLE_SCHRIFT = new Set(['appstore']);
@@ -135,7 +136,7 @@ export default function Uebersicht({ s }) {
               const farbe = SOURCE_COLORS[a.sources[0]?.id] || 'var(--blue)';
               return (
                 <div className="barrow" key={a.key}>
-                  <span className="dot" style={{ background: farbe }} />
+                  <AppIcon src={a.icon} name={a.name} color={farbe} size={28} />
                   <div className="nm">{a.name}</div>
                   <div className="bar"><div className="bar-fill" style={{ width: `${Math.max(1, Math.round((a.d30 / max) * 100))}%`, background: farbe }} /></div>
                   <div className="v">{fmtMoney(a.d30, cur)}</div>

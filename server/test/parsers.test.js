@@ -8,7 +8,8 @@ import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 import { unzip } from '../zip.js';
 import { parseEarningsCsv, parseDate, fetchData as playFetch } from '../sources/playEarnings.js';
 import { sumSales, sumFinance, makeJwt, salesByApp, reportUrl, appleFehler, zusammenfassen } from '../sources/appstore.js';
-import { parseReport } from '../sources/admob.js';
+import { parseReport, storeInfoAusApps, zuStore } from '../sources/admob.js';
+import { ausITunes, ausPlaySeite, findeIcon } from '../icons.js';
 import { parse as parseAdsense } from '../sources/adsense.js';
 import { chartToDaily, projects, mergeProjects, fetchData } from '../sources/revenuecat.js';
 
@@ -172,6 +173,53 @@ test('Apple-Fehler: die Begründung statt der Fehler-ID', () => {
 test('Gleiche Fehler werden gezählt statt wiederholt', () => {
   assert.equal(zusammenfassen(['A', 'A', 'A', 'B']), '3× A | B');
   assert.equal(zusammenfassen(['A']), 'A');
+});
+
+test('AdMob-App-Liste: Store-Kennung und Plattform je App', () => {
+  const m = storeInfoAusApps({ apps: [
+    { appId: 'ca-app-pub-1~11', platform: 'ANDROID', linkedAppInfo: { appStoreId: 'com.beispiel.mahjong' } },
+    { appId: 'ca-app-pub-1~22', platform: 'IOS', linkedAppInfo: { appStoreId: '1234567890' } },
+    { appId: 'ca-app-pub-1~33', platform: 'ANDROID' }, // nicht mit dem Store verknüpft
+  ] });
+  assert.deepEqual(m['ca-app-pub-1~11'], { storeId: 'com.beispiel.mahjong', platform: 'android' });
+  assert.deepEqual(m['ca-app-pub-1~22'], { storeId: '1234567890', platform: 'ios' });
+  assert.equal(m['ca-app-pub-1~33'], undefined);
+  assert.deepEqual(storeInfoAusApps({}), {});
+
+  // Nachschlagen: volle Schreibweise, und ersatzweise nur der Teil nach der Tilde -
+  // falls Bericht und App-Liste die App unterschiedlich benennen.
+  assert.deepEqual(zuStore(m, 'ca-app-pub-1~22'), { storeId: '1234567890', platform: 'ios' });
+  assert.deepEqual(zuStore(m, '22'), { storeId: '1234567890', platform: 'ios' });
+  assert.deepEqual(zuStore(m, 'ca-app-pub-9~99'), {});
+  assert.deepEqual(zuStore({}, 'ca-app-pub-1~22'), {});
+});
+
+test('AdMob-Bericht: Store-Kennung landet an der App-Zeile', () => {
+  const store = storeInfoAusApps({ apps: [
+    { appId: 'ca-app-pub-1~11', platform: 'IOS', linkedAppInfo: { appStoreId: '1234567890' } },
+  ] });
+  const r = parseReport([
+    { header: { localizationSettings: { currencyCode: 'USD' } } },
+    { row: { dimensionValues: { DATE: { value: '20260901' }, APP: { value: 'ca-app-pub-1~11', displayLabel: 'Swaply' } }, metricValues: { ESTIMATED_EARNINGS: { microsValue: '4000000' } } } },
+    { row: { dimensionValues: { DATE: { value: '20260901' }, APP: { value: 'ca-app-pub-1~99', displayLabel: 'Ohne Store' } }, metricValues: { ESTIMATED_EARNINGS: { microsValue: '1000000' } } } },
+  ], store);
+  assert.deepEqual(r.apps[0], { id: 'ca-app-pub-1~11', name: 'Swaply', date: '2026-09-01', amount: 4, currency: 'USD', storeId: '1234567890', platform: 'ios' });
+  // Ohne Zuordnung bleibt die Zeile unverändert gültig, nur ohne Store-Kennung.
+  assert.deepEqual(r.apps[1], { id: 'ca-app-pub-1~99', name: 'Ohne Store', date: '2026-09-01', amount: 1, currency: 'USD' });
+});
+
+test('Icons: Apple-Antwort und Play-Seite lesen', async () => {
+  assert.equal(ausITunes({ resultCount: 1, results: [{ artworkUrl100: 'https://klein.png', artworkUrl512: 'https://gross.png' }] }), 'https://gross.png');
+  assert.equal(ausITunes({ resultCount: 0, results: [] }), null);
+  assert.equal(ausPlaySeite('<head><meta property="og:image" content="https://play-lh.example/icon=s0"></head>'), 'https://play-lh.example/icon=s0');
+  assert.equal(ausPlaySeite('<head>nichts</head>'), null);
+
+  // findeIcon reicht die passende Quelle durch und wirft nie.
+  assert.equal(await findeIcon({ platform: 'ios', storeId: '1' }, { fetchJSON: async () => ({ results: [{ artworkUrl512: 'https://a.png' }] }) }), 'https://a.png');
+  assert.equal(await findeIcon({ platform: 'android', storeId: 'com.x' }, { fetchText: async () => '<meta property="og:image" content="https://b.png">' }), 'https://b.png');
+  assert.equal(await findeIcon({ platform: 'ios', storeId: '1' }, { fetchJSON: async () => { throw new Error('Store weg'); } }), null);
+  assert.equal(await findeIcon({ platform: 'web', storeId: '1' }), null);
+  assert.equal(await findeIcon({}), null);
 });
 
 test('AdSense: Tageswerte und offenes Guthaben', () => {

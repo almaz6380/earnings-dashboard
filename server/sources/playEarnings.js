@@ -70,7 +70,8 @@ export function parseEarningsCsv(text) {
     const id = (r['Product id'] || name).trim();
     if (date && name) {
       const key = `${id}|${date}`;
-      const vorher = perApp.get(key) || { id, name, date, amount: 0, currency };
+      // Die Produkt-Kennung ist der Paketname (com.beispiel.app) - damit findet man das Icon.
+      const vorher = perApp.get(key) || { id, name, date, amount: 0, currency, ...(/^[a-z][\w.]*\.\w+$/i.test(id) ? { platform: 'android', storeId: id } : {}) };
       vorher.amount = Math.round((vorher.amount + amt) * 100) / 100;
       vorher.currency = currency;
       perApp.set(key, vorher);

@@ -113,7 +113,10 @@ test('App-Aufschlüsselung: gleiche App aus zwei Quellen wird eine Zeile', () =>
   ] }, '2026-09-02');
   mergeApps(h, 'appstore', { apps: [{ id: '123', name: 'Swaply ', date: '2026-09-01', amount: 4, currency: 'EUR' }] }, '2026-09-02');
   const s = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z'));
-  const swaply = s.apps.find((a) => a.key === 'swaply');
+  // Ein Icon aus einer der Quellen genügt für die zusammengeführte App.
+  h.apps.admob['ca~11'].icon = 'https://icon.example/swaply.png';
+  const swaply = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z')).apps.find((a) => a.key === 'swaply');
+  assert.equal(swaply.icon, 'https://icon.example/swaply.png');
   assert.equal(swaply.yesterday, 8.8); // 6 USD = 4,80 € + 4 €
   assert.deepEqual(swaply.sources.map((q) => q.id).sort(), ['admob', 'appstore']);
   // Je Quelle stehen dieselben Zeiträume bereit wie für die App, damit die
@@ -145,6 +148,11 @@ test('App-Werte: neuer Abruf ersetzt den Tageswert', () => {
     { id: 'ca~11', name: 'Swaply', date: '2026-09-02', amount: 2, currency: 'EUR' },
   ] }, '2026-09-03');
   assert.deepEqual(h.apps.admob['ca~11'].daily['2026-09-02'], { EUR: 3 });
+
+  // Store-Kennung wird gemerkt, damit das Icon gefunden werden kann.
+  mergeApps(h, 'admob', { apps: [{ id: 'ca~11', name: 'Swaply', date: '2026-09-03', amount: 1, currency: 'EUR', platform: 'android', storeId: 'com.swaply' }] }, '2026-09-04');
+  assert.equal(h.apps.admob['ca~11'].platform, 'android');
+  assert.equal(h.apps.admob['ca~11'].storeId, 'com.swaply');
 });
 
 test('Nicht umrechenbare Währungen: Betrag statt nur Kürzel', () => {
