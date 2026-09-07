@@ -1,16 +1,24 @@
-// Wechselkurse (EZB via frankfurter.app), Tages-Cache im Speicher. Basis = BASE_CURRENCY (EUR).
+// Wechselkurse (EZB via frankfurter.app), Tages-Cache je Basiswährung im Speicher.
 import { loadJSON, saveJSON } from './store.js';
 
-export const BASE = () => (process.env.BASE_CURRENCY || 'EUR').toUpperCase();
+export const DEFAULT_BASE = () => (process.env.BASE_CURRENCY || 'EUR').toUpperCase();
+// Was die EZB führt - andere Basiswährungen lehnt frankfurter.app ab.
+export const BASES = ['EUR', 'USD', 'GBP', 'CHF', 'JPY', 'AUD', 'CAD', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'NZD', 'SGD', 'HKD', 'BRL', 'MXN', 'INR', 'KRW', 'TRY', 'ZAR'];
 
-export async function getRates(dateStr = new Date().toISOString().slice(0, 10)) {
-  const key = `fx:${dateStr}`;
+export function normBase(cur) {
+  const c = String(cur || '').toUpperCase();
+  return BASES.includes(c) ? c : DEFAULT_BASE();
+}
+
+export async function getRates(base = DEFAULT_BASE(), dateStr = new Date().toISOString().slice(0, 10)) {
+  const b = normBase(base);
+  const key = b === 'EUR' ? `fx:${dateStr}` : `fx:${b}:${dateStr}`;
   const cached = await loadJSON(key);
   if (cached?.rates) return cached;
-  const res = await fetch(`https://api.frankfurter.app/latest?from=${BASE()}`);
+  const res = await fetch(`https://api.frankfurter.app/latest?from=${b}`);
   if (!res.ok) throw new Error(`Wechselkurse: ${res.status}`);
   const data = await res.json();
-  const out = { base: BASE(), date: data.date, rates: { ...data.rates, [BASE()]: 1 } };
+  const out = { base: b, date: data.date, rates: { ...data.rates, [b]: 1 } };
   await saveJSON(key, out);
   return out;
 }

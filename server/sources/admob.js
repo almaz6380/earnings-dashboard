@@ -1,12 +1,14 @@
 // AdMob API: Netzwerk-Bericht, geschätzte Einnahmen pro Tag (Micros).
-import { googleFetch } from '../google/oauth.js';
+import { googleConfigured } from '../google/oauth.js';
 import { daysAgo } from '../http.js';
 
 export const meta = { id: 'admob', label: 'AdMob', art: 'Werbeeinnahmen (Schätzung)', kind: 'earned',
-  needs: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'ADMOB_PUBLISHER_ID'], google: true };
+  needs: ['ADMOB_PUBLISHER_ID'], google: true,
+  help: 'Braucht die Google-Verbindung oben. Die Publisher-ID steht in AdMob → Einstellungen → Kontoinformationen.',
+  fields: [{ key: 'ADMOB_PUBLISHER_ID', label: 'Publisher-ID', hint: 'Form pub-1234567890123456' }] };
 
-export function configured() {
-  return !!(process.env.ADMOB_PUBLISHER_ID && process.env.GOOGLE_CLIENT_ID);
+export function configured(cfg = {}) {
+  return !!(cfg.ADMOB_PUBLISHER_ID && googleConfigured());
 }
 
 const dateObj = (d) => ({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() });
@@ -40,8 +42,9 @@ async function storeInfo(pub, fetchJSON) {
   }
 }
 
-export async function fetchData({ days = 60 } = {}) {
-  const pub = process.env.ADMOB_PUBLISHER_ID.replace(/^accounts\//, '');
+export async function fetchData({ cfg = {}, google, days = 60 } = {}) {
+  const googleFetch = google.fetch;
+  const pub = String(cfg.ADMOB_PUBLISHER_ID || '').replace(/^accounts\//, '');
   const body = {
     reportSpec: {
       dateRange: { startDate: dateObj(daysAgo(days)), endDate: dateObj(new Date()) },

@@ -57,6 +57,21 @@ export async function saveJSON(name, value) {
   fs.writeFileSync(fileFor(name), JSON.stringify(value, null, 1));
 }
 
+// Alle Schlüssel mit Präfix (z. B. "user:") - für den Sammellauf über alle Konten.
+export async function listKeys(prefix) {
+  if (useSupabase()) {
+    const pattern = encodeURIComponent(`${prefix}*`);
+    const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}?key=like.${pattern}&select=key&limit=10000`, { headers: sbHeaders() });
+    if (res.status === 404) return [];
+    if (!res.ok) throw new Error(`Supabase auflisten (${prefix}): ${res.status}`);
+    return (await res.json()).map((r) => r.key);
+  }
+  let files = [];
+  try { files = fs.readdirSync(DATA_DIR); } catch { return []; }
+  const safe = (k) => k.replace(/[^a-zA-Z0-9_.-]/g, '_');
+  return files.filter((f) => f.endsWith('.json') && f.startsWith(safe(prefix))).map((f) => f.slice(0, -5));
+}
+
 export async function deleteJSON(name) {
   if (useSupabase()) {
     const res = await fetch(`${process.env.SUPABASE_URL}/rest/v1/${TABLE}?key=eq.${encodeURIComponent(name)}`, {

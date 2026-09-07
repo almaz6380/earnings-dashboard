@@ -1,16 +1,19 @@
 // AdSense Management API v2: Tageseinnahmen + offenes Guthaben ("unpaid").
-import { googleFetch } from '../google/oauth.js';
+import { googleConfigured } from '../google/oauth.js';
 import { parseNumber } from '../csv.js';
 
 export const meta = { id: 'adsense', label: 'AdSense', art: 'Web-Werbung', kind: 'earned',
-  needs: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'ADSENSE_ACCOUNT_ID'], google: true };
+  needs: ['ADSENSE_ACCOUNT_ID'], google: true,
+  help: 'Braucht die Google-Verbindung oben. Nur eintragen, wenn du AdSense (Webseiten) nutzt.',
+  fields: [{ key: 'ADSENSE_ACCOUNT_ID', label: 'Publisher-ID', hint: 'Form pub-1234567890123456' }] };
 
-export function configured() {
-  return !!(process.env.ADSENSE_ACCOUNT_ID && process.env.GOOGLE_CLIENT_ID);
+export function configured(cfg = {}) {
+  return !!(cfg.ADSENSE_ACCOUNT_ID && googleConfigured());
 }
 
-export async function fetchData() {
-  const acc = process.env.ADSENSE_ACCOUNT_ID.replace(/^accounts\//, '');
+export async function fetchData({ cfg = {}, google } = {}) {
+  const googleFetch = google.fetch;
+  const acc = String(cfg.ADSENSE_ACCOUNT_ID || '').replace(/^accounts\//, '');
   const q = new URLSearchParams({ dateRange: 'LAST_30_DAYS', dimensions: 'DATE', metrics: 'ESTIMATED_EARNINGS' });
   const rep = await googleFetch(`https://adsense.googleapis.com/v2/accounts/${acc}/reports:generate?${q}`);
   const pay = await googleFetch(`https://adsense.googleapis.com/v2/accounts/${acc}/payments`).catch(() => ({ payments: [] }));

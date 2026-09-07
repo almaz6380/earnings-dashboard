@@ -119,8 +119,8 @@ export default function Uebersicht({ s }) {
 
       {!active.length ? (
         <div className="panel">
-          <h2>Noch keine Quelle eingerichtet</h2>
-          <p className="hint">Im Tab „Quellen" steht, welche Variablen fehlen. Danach „Aktualisieren" tippen.</p>
+          <h2>Noch keine Quelle verbunden</h2>
+          <p className="hint">Im Tab „Einrichten" die Zugangsdaten deiner Dienste eintragen, danach „Aktualisieren" tippen.</p>
         </div>
       ) : (
         <div className="tiles">

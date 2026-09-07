@@ -14,3 +14,5 @@ client/android/.gradle/
 client/android/local.properties
 *.keystore
 *.jks
+
+client/.env.local

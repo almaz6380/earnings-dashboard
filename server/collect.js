@@ -1,18 +1,28 @@
-// Ein Sammellauf: alle konfigurierten Quellen abrufen, in den Verlauf mischen, Zusammenfassung speichern.
-// Fehler einer Quelle blockieren die anderen nicht.
+// Ein Sammellauf je Konto: alle eingerichteten Quellen abrufen, in den Verlauf mischen,
+// Zusammenfassung speichern. Fehler einer Quelle blockieren die anderen nicht.
 import { loadJSON, saveJSON } from './store.js';
-import { getRates } from './fx.js';
+import { getRates, normBase } from './fx.js';
 import { SOURCES } from './sources/index.js';
 import { buildSummary } from './summary.js';
 import { ergaenzeIcons } from './icons.js';
 import { sendDaily } from './notify.js';
+import { getUser, getConfig, listUserIds, ukey } from './users.js';
+import { googleFor } from './google/oauth.js';
 
 export const emptyHistory = () => ({ daily: {}, payouts: {}, balances: {}, sources: {}, apps: {} });
 
-export async function runCollect({ notify = true } = {}) {
+export const baseOf = (u) => normBase(u?.settings?.baseCurrency);
+
+export async function runCollect({ user, userId, notify = true } = {}) {
+  const u = user || (await getUser(userId));
+  if (!u) throw new Error('Konto nicht gefunden.');
   const started = Date.now();
-  const fx = await getRates();
-  const history = (await loadJSON('history')) || emptyHistory();
+  const cfg = getConfig(u);
+  const base = baseOf(u);
+  const google = googleFor(u.id);
+  const fx = await getRates(base);
+  const hKey = ukey(u.id, 'history'), lKey = ukey(u.id, 'latest');
+  const history = (await loadJSON(hKey)) || emptyHistory();
   history.daily ||= {}; history.payouts ||= {}; history.balances ||= {}; history.sources ||= {}; history.apps ||= {};
   const today = new Date().toISOString().slice(0, 10);
   const results = {};
@@ -20,12 +30,12 @@ export async function runCollect({ notify = true } = {}) {
   for (const src of SOURCES) {
     const id = src.meta.id;
     const s = (history.sources[id] ||= {});
-    if (!src.configured()) { results[id] = { status: 'unconfigured' }; s.status = 'unconfigured'; continue; }
+    if (!src.configured(cfg)) { results[id] = { status: 'unconfigured' }; s.status = 'unconfigured'; continue; }
     const t0 = Date.now();
     try {
       const knownDates = new Set(Object.keys(history.daily[id] || {}));
       const knownMonths = new Set(Object.keys(history.payouts[id] || {}));
-      const data = await src.fetchData({ knownDates, knownMonths });
+      const data = await src.fetchData({ cfg, google, base, knownDates, knownMonths });
       mergeSource(history, id, data, today);
       mergeApps(history, id, data, today);
       Object.assign(s, { status: 'ok', lastOk: new Date().toISOString(), lastError: null, asOf: data.asOf, note: data.note || null, extra: data.extra || {}, currency: data.currency });
@@ -40,16 +50,36 @@ export async function runCollect({ notify = true } = {}) {
   try { await ergaenzeIcons(history); } catch { /* ohne Icons ist der Lauf trotzdem gültig */ }
 
   pruneHistory(history);
-  await saveJSON('history', history);
+  await saveJSON(hKey, history);
   const latest = { collectedAt: new Date().toISOString(), ms: Date.now() - started, fxDate: fx.date, results };
-  await saveJSON('latest', latest);
+  await saveJSON(lKey, latest);
 
   const summary = buildSummary(history, fx, latest);
   if (notify) {
-    try { latest.notify = await sendDaily(summary); } catch (e) { latest.notify = { error: e.message }; }
-    await saveJSON('latest', latest);
+    try { latest.notify = await sendDaily(summary, u.settings || {}); } catch (e) { latest.notify = { error: e.message }; }
+    await saveJSON(lKey, latest);
   }
   return { latest, summary };
+}
+
+// Cron: alle Konten, die am längsten nicht dran waren zuerst, bis das Zeitbudget aufgebraucht ist.
+// Was nicht mehr passt, kommt beim nächsten Lauf dran (Vercel begrenzt die Laufzeit einer Funktion).
+export async function runCollectAll({ notify = true, budgetMs = 50_000, now = Date.now() } = {}) {
+  const ids = await listUserIds();
+  const konten = [];
+  for (const id of ids) {
+    const latest = await loadJSON(ukey(id, 'latest'));
+    konten.push({ id, last: latest?.collectedAt ? Date.parse(latest.collectedAt) : 0 });
+  }
+  konten.sort((a, b) => a.last - b.last);
+  const out = { konten: konten.length, gelaufen: 0, fehler: 0, offen: 0, ms: 0 };
+  for (const k of konten) {
+    if (Date.now() - now > budgetMs) { out.offen++; continue; }
+    try { await runCollect({ userId: k.id, notify }); out.gelaufen++; }
+    catch (e) { out.fehler++; console.error(`Sammellauf ${k.id}: ${e.message}`); }
+  }
+  out.ms = Date.now() - now;
+  return out;
 }
 
 export function mergeSource(history, id, data, today) {

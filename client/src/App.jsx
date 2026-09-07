@@ -2,63 +2,117 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Uebersicht from './views/Uebersicht.jsx';
 import Verlauf from './views/Verlauf.jsx';
 import Apps from './views/Apps.jsx';
-import Quellen from './views/Quellen.jsx';
+import Einrichten from './views/Einrichten.jsx';
+import Konto from './views/Konto.jsx';
 import PullToRefresh from './PullToRefresh.jsx';
 import { fmtDate } from './format.js';
-import { api, NATIV, getServer, setServer, setToken, hasToken, normalizeServer } from './api.js';
-import { splashAusblenden, beiRueckkehr, beiZurueck } from './native.js';
+import { api, NATIV, DEFAULT_SERVER, getServer, setServer, setToken, hasToken, normalizeServer, apiUrl } from './api.js';
+import { splashAusblenden, beiRueckkehr, beiZurueck, beiAppLink, browserSchliessen, extern } from './native.js';
 
 const TABS = [
   { id: 'uebersicht', label: 'Übersicht' },
   { id: 'apps', label: 'Apps' },
   { id: 'verlauf', label: 'Verlauf' },
-  { id: 'quellen', label: 'Quellen' },
+  { id: 'einrichten', label: 'Einrichten' },
+  { id: 'konto', label: 'Konto' },
 ];
 
-function Login({ onOk }) {
+const rechtsLink = (pfad) => `${NATIV ? getServer() : ''}/${pfad}`;
+
+// Anmelden, Registrieren, Passwort vergessen, Passwort zurücksetzen - ein Bildschirm, vier Zustände.
+function Auth({ onOk, resetToken }) {
+  const [modus, setModus] = useState(resetToken ? 'reset' : 'login');
   const [server, setServerFeld] = useState(getServer());
+  const [eigener, setEigener] = useState(NATIV && !DEFAULT_SERVER);
+  const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [accept, setAccept] = useState(false);
   const [err, setErr] = useState(null);
+  const [info, setInfo] = useState(null);
   const [busy, setBusy] = useState(false);
+
+  const serverFeld = NATIV && eigener;
+
+  async function serverSetzen() {
+    if (!NATIV) return;
+    const u = normalizeServer(serverFeld ? server : (getServer() || DEFAULT_SERVER));
+    if (!/^https:\/\/[^/]+\.[^/]+/.test(u)) throw new Error('Server-Adresse bitte als https://… angeben (kein http).');
+    await setServer(u);
+  }
 
   async function submit(e) {
     e.preventDefault();
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setInfo(null);
     try {
-      if (NATIV) {
-        const u = normalizeServer(server);
-        if (!/^https:\/\/[^/]+\.[^/]+/.test(u)) throw new Error('Server-Adresse bitte als https://… angeben (kein http).');
-        await setServer(u);
+      await serverSetzen();
+      if (modus === 'forgot') {
+        const r = await api('/api/password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'forgot', email }) });
+        setInfo(r.hinweis || 'E-Mail unterwegs.');
+        return;
       }
-      const r = await api('/api/login', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(NATIV ? { password: pw, token: true } : { password: pw }),
-      });
+      if (modus === 'reset') {
+        if (pw !== pw2) throw new Error('Die Passwörter stimmen nicht überein.');
+        await api('/api/password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reset', token: resetToken, password: pw }) });
+        history.replaceState(null, '', location.pathname);
+        setInfo('Passwort gesetzt. Jetzt anmelden.'); setModus('login'); setPw(''); setPw2('');
+        return;
+      }
+      if (modus === 'register' && pw !== pw2) throw new Error('Die Passwörter stimmen nicht überein.');
+      const body = { email, password: pw, ...(NATIV ? { token: true } : {}), ...(modus === 'register' ? { accept } : {}) };
+      const r = await api(modus === 'register' ? '/api/register' : '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
       if (NATIV) {
         if (!r.token) throw new Error('Der Server hat kein Token geliefert. Läuft dort die aktuelle Version?');
         await setToken(r.token);
       }
-      onOk();
+      onOk(modus === 'register');
     } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
   }
+
+  const titel = { login: 'Anmelden', register: 'Konto erstellen', forgot: 'Passwort vergessen', reset: 'Neues Passwort' }[modus];
+  const text = {
+    login: 'Alle App-Einnahmen an einer Stelle.',
+    register: 'Kostenloses Konto. Deine Zugangsdaten zu den Diensten bleiben verschlüsselt auf dem Server und werden nur lesend genutzt.',
+    forgot: 'Wir schicken dir einen Link, mit dem du ein neues Passwort setzen kannst.',
+    reset: 'Bitte ein neues Passwort wählen (mindestens 10 Zeichen).',
+  }[modus];
 
   return (
     <div className="login">
       <form className="panel" onSubmit={submit}>
         <h1>Einnahmen</h1>
-        <p className="hint">{NATIV ? 'Adresse deines Dashboards und Passwort eingeben.' : 'Privates Dashboard. Bitte Passwort eingeben.'}</p>
-        {NATIV && (
-          <input
-            type="url" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false}
-            value={server} onChange={(e) => setServerFeld(e.target.value)}
-            placeholder="https://mein-dashboard.vercel.app" autoComplete="url"
-          />
+        <p className="hint">{text}</p>
+        {serverFeld && (
+          <input type="url" inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            value={server} onChange={(e) => setServerFeld(e.target.value)} placeholder="https://mein-server.example" autoComplete="url" />
         )}
-        <input type="password" autoFocus={!NATIV || !!server} value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Passwort" autoComplete="current-password" />
-        <button className="btn primary" disabled={busy || !pw || (NATIV && !server)}>{busy ? '…' : 'Anmelden'}</button>
+        {modus !== 'reset' && (
+          <input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} autoFocus
+            value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-Mail" autoComplete={modus === 'register' ? 'email' : 'username'} />
+        )}
+        {modus !== 'forgot' && (
+          <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder={modus === 'login' ? 'Passwort' : 'Passwort (mind. 10 Zeichen)'}
+            autoComplete={modus === 'login' ? 'current-password' : 'new-password'} />
+        )}
+        {(modus === 'register' || modus === 'reset') && (
+          <input type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Passwort wiederholen" autoComplete="new-password" />
+        )}
+        {modus === 'register' && (
+          <label className="check">
+            <input type="checkbox" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
+            <span>Ich akzeptiere die <a href={rechtsLink('nutzungsbedingungen.html')} target="_blank" rel="noreferrer" onClick={(e) => { if (NATIV) { e.preventDefault(); extern(rechtsLink('nutzungsbedingungen.html')); } }}>Nutzungsbedingungen</a> und habe die <a href={rechtsLink('datenschutz.html')} target="_blank" rel="noreferrer" onClick={(e) => { if (NATIV) { e.preventDefault(); extern(rechtsLink('datenschutz.html')); } }}>Datenschutzerklärung</a> gelesen.</span>
+          </label>
+        )}
+        <button className="btn primary" disabled={busy || (modus !== 'reset' && !email) || (modus !== 'forgot' && !pw) || (modus === 'register' && !accept) || (serverFeld && !server)}>
+          {busy ? '…' : titel}
+        </button>
         {err && <div className="error">{err}</div>}
-        {NATIV && <p className="hint small">Die Adresse ist die, unter der das Dashboard im Browser läuft (Vercel oder eigener Server, nur https).</p>}
+        {info && <div className="flash">{info}</div>}
+        <div className="authlinks">
+          {modus === 'login' && <><button type="button" className="link" onClick={() => { setModus('register'); setErr(null); }}>Konto erstellen</button><button type="button" className="link" onClick={() => { setModus('forgot'); setErr(null); }}>Passwort vergessen?</button></>}
+          {modus !== 'login' && <button type="button" className="link" onClick={() => { setModus('login'); setErr(null); }}>Zurück zur Anmeldung</button>}
+          {NATIV && DEFAULT_SERVER && <button type="button" className="link" onClick={() => setEigener(!eigener)}>{eigener ? 'Standard-Server verwenden' : 'Eigener Server …'}</button>}
+        </div>
       </form>
     </div>
   );
@@ -72,6 +126,7 @@ export default function App() {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(null);
+  const [resetToken] = useState(() => new URLSearchParams(location.search).get('reset'));
 
   const load = useCallback(async () => {
     try {
@@ -82,35 +137,41 @@ export default function App() {
     }
   }, []);
 
+  // Ergebnis des Google-Logins anzeigen (Web: ?google=…, App: einnahmen://google?…).
+  const googleErgebnis = useCallback((q) => {
+    setFlash(q.get('google') === 'ok' ? `Google verbunden${q.get('email') ? ` (${q.get('email')})` : ''}. Jetzt „Aktualisieren" tippen.` : `Google-Verbindung fehlgeschlagen: ${q.get('msg') || 'unbekannter Fehler'}`);
+    setTab('einrichten');
+  }, []);
+
   useEffect(() => {
-    // In der App ohne gespeichertes Token gleich die Login-Maske, ohne Netzanfrage.
     if (NATIV && !hasToken()) { setAuthed(false); return; }
     api('/api/login').then((r) => setAuthed(!!r.angemeldet)).catch((e) => {
-      // Server nicht erreichbar: in der App lieber die Fehlermeldung zeigen als das Login.
       if (NATIV && e.status === 0) { setAuthed(true); setError(e.message); } else setAuthed(false);
     });
     const q = new URLSearchParams(location.search);
     if (q.get('google')) {
-      setFlash(q.get('google') === 'ok' ? `Google verbunden${q.get('email') ? ` (${q.get('email')})` : ''}. Jetzt „Aktualisieren" tippen.` : `Google-Verbindung fehlgeschlagen: ${q.get('msg') || 'unbekannter Fehler'}`);
+      googleErgebnis(q);
       history.replaceState(null, '', location.pathname + location.hash);
-      setTab('quellen');
     }
-  }, []);
+  }, [googleErgebnis]);
 
   useEffect(() => { if (authed) load(); }, [authed, load]);
   useEffect(() => { history.replaceState(null, '', `#${tab}`); }, [tab]);
-
-  // Splash weg, sobald klar ist, was angezeigt wird.
   useEffect(() => { if (authed !== null) splashAusblenden(); }, [authed]);
-
-  // App kommt aus dem Hintergrund: Daten neu laden (der Cron hat vielleicht gesammelt).
   useEffect(() => { if (!authed) return undefined; return beiRueckkehr(load); }, [authed, load]);
-
-  // Android-Zurück: erst zur Übersicht, dann App in den Hintergrund.
   useEffect(() => beiZurueck(() => {
     if (tab !== 'uebersicht') { setTab('uebersicht'); return true; }
     return false;
   }), [tab]);
+  useEffect(() => beiAppLink((url) => {
+    try {
+      const u = new URL(url);
+      if (u.host !== 'google' && u.pathname !== '//google') return;
+      browserSchliessen();
+      googleErgebnis(u.searchParams);
+      load();
+    } catch { /* fremder Link, ignorieren */ }
+  }), [googleErgebnis, load]);
 
   async function collect() {
     setBusy(true); setError(null);
@@ -119,14 +180,21 @@ export default function App() {
     finally { setBusy(false); }
   }
 
-  async function logout() {
-    await api('/api/logout', { method: 'POST' }).catch(() => {});
+  async function logout({ still = false } = {}) {
+    if (!still) await api('/api/logout', { method: 'POST' }).catch(() => {});
     if (NATIV) await setToken(null);
-    setAuthed(false); setState(null); setError(null);
+    setAuthed(false); setState(null); setStatus(null); setError(null); setTab('uebersicht');
+  }
+
+  function angemeldet(neu) {
+    setAuthed(true);
+    if (neu) { setTab('einrichten'); setFlash('Willkommen! Verbinde jetzt deine erste Quelle.'); }
   }
 
   if (authed === null) return <div className="app"><p className="hint">Lade …</p></div>;
-  if (!authed) return <Login onOk={() => setAuthed(true)} />;
+  if (!authed) return <Auth onOk={angemeldet} resetToken={resetToken} />;
+
+  const nichtsEingerichtet = status && !status.sources.some((q) => q.configured);
 
   return (
     <div className="app">
@@ -134,11 +202,10 @@ export default function App() {
       <header className="top">
         <div className="top-row">
           <h1>Einnahmen</h1>
-          <span className="sub">{state?.collectedAt ? `Stand ${fmtDate(state.collectedAt)}` : 'Noch kein Sammellauf'}</span>
+          <span className="sub">{state?.collectedAt ? `Stand ${fmtDate(state.collectedAt)}` : 'Noch kein Abruf'}</span>
         </div>
         <div className="btnrow">
-          <button className="btn small" onClick={collect} disabled={busy}>{busy ? 'Sammle …' : 'Aktualisieren'}</button>
-          <button className="btn small ghost" onClick={logout}>Abmelden</button>
+          <button className="btn small" onClick={collect} disabled={busy}>{busy ? 'Rufe ab …' : 'Aktualisieren'}</button>
         </div>
       </header>
       <nav className="tabs">
@@ -150,17 +217,29 @@ export default function App() {
       {error && (
         <div className="error panel">
           {error}
-          {!state && <div className="btnrow" style={{ marginTop: 8 }}><button className="btn small" onClick={load}>Erneut versuchen</button><button className="btn small ghost" onClick={logout}>{NATIV ? 'Server wechseln' : 'Abmelden'}</button></div>}
+          {!state && <div className="btnrow" style={{ marginTop: 8 }}><button className="btn small" onClick={load}>Erneut versuchen</button><button className="btn small ghost" onClick={() => logout()}>{NATIV ? 'Abmelden / Server wechseln' : 'Abmelden'}</button></div>}
         </div>
       )}
       {!state ? (!error && <p className="hint">Lade Daten …</p>) : (
         <>
+          {tab === 'uebersicht' && nichtsEingerichtet && (
+            <div className="panel">
+              <h2>Erste Schritte</h2>
+              <p>Noch keine Quelle verbunden. Unter „Einrichten" trägst du RevenueCat, AdMob, App Store, Google Play, Wise oder PayPal ein - danach „Aktualisieren".</p>
+              <button className="btn primary" onClick={() => setTab('einrichten')}>Zum Einrichten</button>
+            </div>
+          )}
           {tab === 'uebersicht' && <Uebersicht s={state} />}
           {tab === 'apps' && <Apps s={state} />}
           {tab === 'verlauf' && <Verlauf s={state} />}
-          {tab === 'quellen' && <Quellen s={state} status={status} onChanged={load} />}
+          {tab === 'einrichten' && <Einrichten s={state} status={status} onChanged={load} onCollect={collect} busy={busy} />}
+          {tab === 'konto' && <Konto status={status} onLogout={logout} onChanged={load} />}
         </>
       )}
+      <footer className="foot">
+        <a href={`${status?.webUrl || apiUrl('')}/datenschutz.html`} target="_blank" rel="noreferrer" onClick={(e) => { if (NATIV) { e.preventDefault(); extern(`${status?.webUrl || apiUrl('')}/datenschutz.html`); } }}>Datenschutz</a>
+        <a href={`${status?.webUrl || apiUrl('')}/nutzungsbedingungen.html`} target="_blank" rel="noreferrer" onClick={(e) => { if (NATIV) { e.preventDefault(); extern(`${status?.webUrl || apiUrl('')}/nutzungsbedingungen.html`); } }}>Nutzungsbedingungen</a>
+      </footer>
     </div>
   );
 }

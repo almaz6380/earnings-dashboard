@@ -11,6 +11,8 @@ import { Preferences } from '@capacitor/preferences';
 export const NATIV = Capacitor.isNativePlatform();
 export const PLATTFORM = Capacitor.getPlatform(); // 'web' | 'ios' | 'android'
 
+// Fest eingebaute Adresse des Dienstes (beim Bauen der App: VITE_SERVER_URL in client/.env.local).
+// Ohne sie fragt die App beim Anmelden nach der Adresse (Selbst-Hosting).
 let server = '';   // '' = gleiche Domain (Browser)
 let token = null;
 
@@ -20,10 +22,12 @@ export function normalizeServer(url) {
   return u;
 }
 
+export const DEFAULT_SERVER = normalizeServer(import.meta.env.VITE_SERVER_URL || '');
+
 export async function initApi() {
   if (!NATIV) return;
   const [s, t] = await Promise.all([Preferences.get({ key: 'server' }), Preferences.get({ key: 'token' })]);
-  server = normalizeServer(s.value || '');
+  server = normalizeServer(s.value || '') || DEFAULT_SERVER;
   token = t.value || null;
 }
 

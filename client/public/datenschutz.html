@@ -10,41 +10,60 @@
     main { max-width: 720px; margin: 0 auto; padding: 32px 20px 64px; }
     h1 { font-size: 26px; margin: 0 0 6px; } h2 { font-size: 17px; margin: 28px 0 8px; }
     p, li { font-size: 15px; } .muted { color: #8b95a3; font-size: 13px; }
-    a { color: #58a6ff; } code { color: #d29922; font-size: 13px; }
+    a { color: #58a6ff; } code { color: #d29922; font-size: 13px; } .box { background: #171c23; border-radius: 12px; padding: 12px 16px; }
   </style>
 </head>
 <body>
 <main>
   <h1>Datenschutzerklärung</h1>
-  <p class="muted">App „Einnahmen" (iOS, Android, Web) · Stand: September 2026</p>
+  <p class="muted">Dienst „Einnahmen" (App für iOS und Android sowie Web) · Stand: September 2026</p>
 
-  <h2>Worum es geht</h2>
-  <p>„Einnahmen" ist ein privates Dashboard. Es zeigt die Einnahmen des Betreibers aus App-Stores, Werbenetzwerken und Zahlungsdiensten in einer Währung an. Die App ist ein Anzeigeprogramm: Sie verbindet sich ausschließlich mit dem Server, dessen Adresse man beim Anmelden selbst einträgt. Es gibt keine Nutzerkonten, keine Registrierung, keine Werbung und keine Analyse-SDKs.</p>
+  <h2>1. Verantwortlicher</h2>
+  <p class="box">[Name des Betreibers]<br>[Straße, Hausnummer]<br>[PLZ Ort, Land]<br>E-Mail: [kontakt@…]</p>
 
-  <h2>Verantwortlicher</h2>
-  <p>Verantwortlich ist, wer den Server betreibt und die App installiert – bei dieser App ist das derselbe Mensch. Kontakt: siehe Impressum bzw. Store-Eintrag.</p>
+  <h2>2. Was der Dienst tut</h2>
+  <p>„Einnahmen" zeigt dir die Erlöse deiner Apps aus App-Stores, Werbenetzwerken und Zahlungsdiensten in einer Währung an. Dafür rufen unsere Server mit den Zugangsdaten, die du selbst einträgst, lesend Berichte bei diesen Diensten ab. Wir ändern dort nichts und können keine Zahlungen auslösen.</p>
 
-  <h2>Welche Daten die App verarbeitet</h2>
+  <h2>3. Welche Daten wir verarbeiten</h2>
   <ul>
-    <li><strong>Server-Adresse und Sitzungs-Token:</strong> Beide werden nach der Anmeldung nur auf dem Gerät gespeichert (iOS: App-Container, Android: App-eigene Preferences, jeweils ohne Cloud-Backup). Beim Abmelden werden sie gelöscht.</li>
-    <li><strong>Passwort:</strong> wird nur zum Anmelden an den eigenen Server gesendet und nicht auf dem Gerät gespeichert.</li>
-    <li><strong>Einnahmen-Daten:</strong> Umsätze, Kontostände und App-Namen kommen vom eigenen Server und werden nur zur Anzeige geladen, nicht dauerhaft auf dem Gerät gespeichert.</li>
+    <li><strong>Konto:</strong> E-Mail-Adresse, Passwort (nur als scrypt-Hash gespeichert, nie im Klartext), Zeitpunkt der Registrierung, Einstellungen (Basiswährung, Benachrichtigungen).</li>
+    <li><strong>Zugangsdaten zu Drittdiensten:</strong> API-Schlüssel, Projekt-IDs, Publisher-IDs, Vendor-Nummern, private Schlüssel (App Store Connect) sowie ein Google-Refresh-Token. Sie werden mit AES-256-GCM verschlüsselt gespeichert, nie an dich oder Dritte zurückgegeben und ausschließlich für den Abruf deiner Berichte verwendet.</li>
+    <li><strong>Einnahmen-Daten:</strong> Tageswerte, Monatsauszahlungen, Kontostände, App-Namen und -Kennungen, wie sie die Dienste liefern. Verlauf bis zu 2 Jahre, Kontostände bis zu 1 Jahr.</li>
+    <li><strong>Technische Daten:</strong> IP-Adresse und Zeitpunkt bei Anmeldeversuchen (für die Sperre nach Fehlversuchen, kurzlebig), Server-Logs des Hosting-Anbieters.</li>
+    <li><strong>Auf deinem Gerät:</strong> Sitzungs-Token und Server-Adresse im App-Speicher (ohne Cloud-Backup). Abmelden löscht sie.</li>
   </ul>
 
-  <h2>Was der Server verarbeitet</h2>
-  <p>Der Server holt mit den vom Betreiber hinterlegten Zugangsdaten lesend Berichte bei RevenueCat, Google (AdMob, AdSense, Play), Apple App Store Connect, Wise und PayPal ab und speichert daraus Tageswerte und Kontostände. Zugangsschlüssel liegen ausschließlich als Umgebungsvariablen auf dem Server; das Google-Token wird verschlüsselt abgelegt. Wechselkurse kommen von der Europäischen Zentralbank (über frankfurter.app, ohne personenbezogene Daten). Optional sendet der Server eine tägliche Zusammenfassung per Telegram oder ntfy an den Betreiber.</p>
+  <h2>4. Zwecke und Rechtsgrundlagen (DSGVO)</h2>
+  <ul>
+    <li>Bereitstellung des Dienstes, Abruf und Anzeige deiner Einnahmen: Art. 6 Abs. 1 lit. b (Vertragserfüllung).</li>
+    <li>Tägliche Zusammenfassung per Telegram oder ntfy: Art. 6 Abs. 1 lit. a (Einwilligung, jederzeit im Konto abschaltbar).</li>
+    <li>Sicherheit, Missbrauchsabwehr, Anmeldesperren: Art. 6 Abs. 1 lit. f (berechtigtes Interesse).</li>
+  </ul>
 
-  <h2>Weitergabe an Dritte</h2>
-  <p>Die App gibt keine Daten an Dritte weiter. Es werden keine Tracking-, Werbe- oder Analysedienste eingebunden. Die Verbindung zum Server erfolgt ausschließlich verschlüsselt (HTTPS).</p>
+  <h2>5. Drittdienste, die wir in deinem Auftrag abrufen</h2>
+  <p>Je nachdem, was du einrichtest: RevenueCat, Google (AdMob API, AdSense Management API, Cloud Storage für Play-Finanzberichte), Apple App Store Connect API, Wise, PayPal. Dabei übermitteln wir deine Zugangsdaten an den jeweiligen Dienst; es gelten dessen Datenschutzbestimmungen. Wechselkurse beziehen wir von frankfurter.app (Europäische Zentralbank) ohne personenbezogene Daten. App-Icons laden wir von den öffentlichen Store-Seiten.</p>
+  <p><strong>Google-Daten:</strong> Die Nutzung von Informationen aus Google-APIs richtet sich nach der <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a> einschließlich der Limited-Use-Anforderungen. Wir verwenden Google-Daten nur, um dir deine eigenen Berichte anzuzeigen, geben sie nicht weiter und nutzen sie nicht für Werbung. Den Zugriff kannst du jederzeit in der App („Trennen") oder unter <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> entziehen.</p>
 
-  <h2>Berechtigungen</h2>
-  <p>Die App benötigt nur Internetzugang. Sie greift nicht auf Kontakte, Standort, Kamera, Fotos oder andere Gerätedaten zu.</p>
+  <h2>6. Auftragsverarbeiter und Hosting</h2>
+  <ul>
+    <li><strong>Hosting und Serverless-Funktionen:</strong> Vercel Inc., Region Frankfurt (fra1). [oder: eigener Server bei …]</li>
+    <li><strong>Datenbank:</strong> Supabase Inc. (Postgres), Region [EU-Region eintragen].</li>
+    <li><strong>E-Mail-Versand</strong> (nur „Passwort vergessen"): Resend Inc.</li>
+    <li><strong>Benachrichtigungen</strong> (nur wenn du sie einrichtest): Telegram FZ-LLC bzw. ntfy.sh.</li>
+  </ul>
+  <p>Mit Auftragsverarbeitern bestehen Verträge nach Art. 28 DSGVO; bei Übermittlung in Drittländer greifen die EU-Standardvertragsklauseln.</p>
 
-  <h2>Rechte</h2>
-  <p>Da die App keine Daten über Dritte erhebt, betreffen Auskunft, Berichtigung und Löschung nur die Daten des Betreibers selbst. Alle gespeicherten Daten lassen sich durch Abmelden (Gerät) bzw. Löschen des Speichers (Server) vollständig entfernen.</p>
+  <h2>7. Speicherdauer und Löschung</h2>
+  <p>Deine Daten bleiben gespeichert, solange dein Konto besteht. Mit „Konto löschen" in der App werden Konto, Zugangsdaten, Google-Token, Verlauf und Einstellungen sofort und unwiderruflich gelöscht. Anmeldesperren verfallen nach 15 Minuten. Server-Logs des Hosting-Anbieters werden nach dessen Fristen gelöscht.</p>
 
-  <h2>Änderungen</h2>
-  <p>Diese Erklärung wird angepasst, wenn sich die App ändert. Die aktuelle Fassung liegt unter <code>/datenschutz.html</code> auf dem jeweiligen Server.</p>
+  <h2>8. Keine Werbung, kein Tracking</h2>
+  <p>Die App enthält keine Werbung, keine Analyse- oder Tracking-SDKs und setzt keine Cookies außer dem Sitzungs-Cookie im Browser (technisch notwendig).</p>
+
+  <h2>9. Deine Rechte</h2>
+  <p>Du hast das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch (Art. 15–21 DSGVO) sowie auf Beschwerde bei einer Aufsichtsbehörde. Löschung und Änderung deiner Daten kannst du direkt in der App vornehmen; für alles andere schreib an die oben genannte Adresse.</p>
+
+  <h2>10. Änderungen</h2>
+  <p>Wir passen diese Erklärung an, wenn sich der Dienst ändert. Die aktuelle Fassung ist immer unter dieser Adresse abrufbar.</p>
 </main>
 </body>
 </html>

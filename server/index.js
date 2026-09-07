@@ -13,12 +13,17 @@ import logout from './handlers/logout.js';
 import googleStart from './handlers/googleStart.js';
 import googleCallback from './handlers/googleCallback.js';
 import googleDisconnect from './handlers/googleDisconnect.js';
+import googleLink from './handlers/googleLink.js';
+import register from './handlers/register.js';
+import account from './handlers/account.js';
+import config from './handlers/config.js';
+import password from './handlers/password.js';
 import { useSupabase } from './store.js';
 import { applyCors } from './cors.js';
 
 const PORT = +(process.env.PORT || 3001);
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '256kb' }));
 // Preflights der nativen App (OPTIONS) beantworten, bevor die GET/POST-Routen greifen.
 app.use('/api', (req, res, next) => (applyCors(req, res) ? undefined : next()));
 
@@ -27,6 +32,11 @@ app.get('/api/status', status);
 app.all('/api/collect', collect);
 app.all('/api/login', login);
 app.post('/api/logout', logout);
+app.post('/api/register', register);
+app.all('/api/account', account);
+app.all('/api/config', config);
+app.post('/api/password', password);
+app.get('/api/google/link', googleLink);
 app.get('/api/google/start', googleStart);
 app.get('/api/google/callback', googleCallback);
 app.post('/api/google/disconnect', googleDisconnect);
@@ -40,6 +50,6 @@ if (fs.existsSync(dist)) {
 
 app.listen(PORT, () => {
   console.log(`API-Server läuft auf http://localhost:${PORT} – Speicher: ${useSupabase() ? 'Supabase' : 'data/'}`);
-  const fehlt = ['DASHBOARD_PASSWORD', 'SESSION_SECRET', 'TOKEN_ENC_KEY'].filter((k) => !process.env[k]);
+  const fehlt = ['SESSION_SECRET', 'TOKEN_ENC_KEY'].filter((k) => !process.env[k]);
   if (fehlt.length) console.warn(`Achtung, fehlt in .env: ${fehlt.join(', ')}`);
 });

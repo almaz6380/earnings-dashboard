@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 process.env.SESSION_SECRET = 'test-secret-mindestens-16-zeichen';
 process.env.TOKEN_ENC_KEY = 'test-enc-key-mindestens-16-zeichen';
-process.env.DASHBOARD_PASSWORD = 'geheim123';
 process.env.BASE_CURRENCY = 'EUR';
 
 const { makeToken, verifyToken, parseCookies, cookieHeader, COOKIE } = await import('../auth.js');
@@ -12,16 +11,20 @@ const { toBase } = await import('../fx.js');
 const { mergeSource, mergeApps, pruneHistory, emptyHistory } = await import('../collect.js');
 const { buildSummary } = await import('../summary.js');
 const { formatDaily } = await import('../notify.js');
-const { makeState, verifyState } = await import('../google/oauth.js');
+const { makeState, verifyState, makeTicket, verifyTicket } = await import('../google/oauth.js');
+const { hashPassword, checkPassword, passwordProblem, maskConfig, normEmail, emailOk } = await import('../users.js');
+
+const USER = { id: 'abc123', pwv: 1 };
 
 const FX = { base: 'EUR', date: '2026-09-02', rates: { EUR: 1, USD: 1.25, CHF: 0.95 } };
 
-test('Sitzungs-Token: gültig, abgelaufen, manipuliert', () => {
-  const t = makeToken(1_000_000);
-  assert.ok(verifyToken(t, 1_000_000 + 1000));
-  assert.ok(!verifyToken(t, 1_000_000 + 31 * 86400000));
-  assert.ok(!verifyToken(t.slice(0, -2) + 'xx', 1_000_000));
-  assert.ok(!verifyToken('', 0));
+test('Sitzungs-Token: gültig, abgelaufen, manipuliert, trägt Konto und Passwort-Version', () => {
+  const t = makeToken(USER, 1_000_000);
+  assert.deepEqual(verifyToken(t, 1_000_000 + 1000), { id: 'abc123', pwv: 1 });
+  assert.equal(verifyToken(t, 1_000_000 + 31 * 86400000), null);
+  assert.equal(verifyToken(t.slice(0, -2) + 'xx', 1_000_000), null);
+  assert.equal(verifyToken(t.replace('abc123.1.', 'abc123.2.'), 1_000_000), null); // andere pwv, gleiche Signatur
+  assert.equal(verifyToken('', 0), null);
   assert.equal(parseCookies(`a=1; ${COOKIE}=${t}`)[COOKIE], t);
   assert.match(cookieHeader('abc', { maxAgeSec: 10, secure: true }), /HttpOnly; SameSite=Lax; Max-Age=10; Secure/);
 });
@@ -34,11 +37,41 @@ test('Verschlüsselung hin und zurück, Manipulation fliegt auf', () => {
   assert.throws(() => decrypt([iv, tag, Buffer.from('xxxx').toString('base64')].join('.')));
 });
 
-test('Google-State signiert und zeitlich begrenzt', () => {
-  const s = makeState();
-  assert.ok(verifyState(s));
-  assert.ok(!verifyState(s + 'x'));
-  assert.ok(!verifyState(''));
+test('Google-State signiert, zeitlich begrenzt, trägt Konto und Herkunft', () => {
+  const s = makeState('abc123', { native: true });
+  assert.equal(verifyState(s).u, 'abc123');
+  assert.equal(verifyState(s).native, true);
+  assert.equal(verifyState(makeState('abc123')).native, false);
+  assert.equal(verifyState(s + 'x'), null);
+  assert.equal(verifyState(''), null);
+  // Ticket für die App: nur als Ticket gültig, nicht als State und umgekehrt
+  const t = makeTicket('abc123');
+  assert.equal(verifyTicket(t).u, 'abc123');
+  assert.equal(verifyTicket(s), null);
+});
+
+test('Passwörter: scrypt-Hash, Prüfung, Mindestlänge', () => {
+  const h = hashPassword('sehr-geheim-123');
+  assert.notEqual(h, 'sehr-geheim-123');
+  assert.notEqual(hashPassword('sehr-geheim-123'), h); // eigenes Salt je Hash
+  assert.ok(checkPassword('sehr-geheim-123', h));
+  assert.ok(!checkPassword('sehr-geheim-124', h));
+  assert.ok(!checkPassword('sehr-geheim-123', 'kaputt'));
+  assert.ok(!checkPassword(undefined, h));
+  assert.match(passwordProblem('kurz'), /mindestens 10/);
+  assert.equal(passwordProblem('lang-genug-passwort'), null);
+  assert.equal(normEmail('  Max@Example.COM '), 'max@example.com');
+  assert.ok(emailOk('max@example.com'));
+  assert.ok(!emailOk('max@example'));
+  assert.ok(!emailOk('kein-at'));
+});
+
+test('Konfiguration maskiert: Geheimnisse nur mit Endung, Rest im Klartext', () => {
+  const fields = new Map([['WISE_API_TOKEN', { secret: true }], ['WISE_PROFILE_ID', {}]]);
+  const m = maskConfig({ WISE_API_TOKEN: 'abcdefghijkl', WISE_PROFILE_ID: '4711', UNBEKANNT: 'x' }, fields);
+  assert.deepEqual(m.WISE_API_TOKEN, { set: true, hint: '…ijkl' });
+  assert.deepEqual(m.WISE_PROFILE_ID, { set: true, value: '4711' });
+  assert.equal(m.UNBEKANNT.value, undefined); // unbekannte Felder gelten als geheim
 });
 
 test('Wechselkurs: Basis, Fremdwährung, unbekannt', () => {
@@ -232,7 +265,7 @@ const { isAuthed } = await import('../auth.js');
 const { allowedOrigin, applyCors } = await import('../cors.js');
 
 test('Bearer-Token zählt wie das Cookie', () => {
-  const t = makeToken();
+  const t = makeToken(USER);
   assert.ok(isAuthed({ headers: { authorization: `Bearer ${t}` } }));
   assert.ok(isAuthed({ headers: { cookie: `${COOKIE}=${t}` } }));
   assert.ok(!isAuthed({ headers: { authorization: 'Bearer kaputt.kaputt' } }));

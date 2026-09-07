@@ -44,12 +44,12 @@ test('Play-Earnings: Tagessummen und Monatsauszahlung', () => {
 });
 
 test('Play: fehlender Bucket ist kein Fehler, sondern "noch nichts da"', async () => {
-  process.env.PLAY_GCS_BUCKET = 'pubsite_prod_rev_0000000000000000000';
+  const cfg = { PLAY_GCS_BUCKET: 'pubsite_prod_rev_0000000000000000000' };
   const holeToken = async () => 'test-token';
   const vierNullVier = async () => {
     throw new Error('GET https://storage.googleapis.com/storage/v1/b/pubsite_prod_rev_0/o -> 404: {"error":{"code":404}}');
   };
-  const r = await playFetch({ holeToken, fetchJSON: vierNullVier });
+  const r = await playFetch({ cfg, holeToken, fetchJSON: vierNullVier });
   assert.deepEqual(r.daily, []);
   assert.deepEqual(r.payouts, []);
   // Der Hinweis nennt beide möglichen Ursachen und den geprüften Bucket-Namen.
@@ -58,11 +58,11 @@ test('Play: fehlender Bucket ist kein Fehler, sondern "noch nichts da"', async (
   assert.match(r.note, /PLAY_GCS_BUCKET/);
 
   // Ein leerer, aber vorhandener Bucket ist dagegen eindeutig: nur noch kein Bericht.
-  const leer = await playFetch({ holeToken, fetchJSON: async () => ({ items: [] }) });
+  const leer = await playFetch({ cfg, holeToken, fetchJSON: async () => ({ items: [] }) });
   assert.match(leer.note, /Noch kein Earnings-Bericht im Bucket/);
 
   // Alles andere bleibt ein echter Fehler - eine fehlende Berechtigung darf nicht durchrutschen.
-  await assert.rejects(() => playFetch({ holeToken, fetchJSON: async () => { throw new Error('GET … -> 403: kein Zugriff'); } }), /403/);
+  await assert.rejects(() => playFetch({ cfg, holeToken, fetchJSON: async () => { throw new Error('GET … -> 403: kein Zugriff'); } }), /403/);
 });
 
 test('ZIP entpacken (Store und Deflate)', () => {
@@ -279,15 +279,13 @@ test('RevenueCat: verschiedene Währungen bleiben getrennt', () => {
 });
 
 test('RevenueCat: ein kaputtes Projekt blockiert das andere nicht', async () => {
-  const env = { REVENUECAT_API_KEY: 'k1', REVENUECAT_PROJECT_ID: 'gut', REVENUECAT_API_KEY_2: 'k2', REVENUECAT_PROJECT_ID_2: 'kaputt' };
-  const alt = {};
-  for (const [k, v] of Object.entries(env)) { alt[k] = process.env[k]; process.env[k] = v; }
+  const cfg = { REVENUECAT_API_KEY: 'k1', REVENUECAT_PROJECT_ID: 'gut', REVENUECAT_API_KEY_2: 'k2', REVENUECAT_PROJECT_ID_2: 'kaputt' };
   const fetchJSON = async (url) => {
     if (url.includes('kaputt')) throw new Error('401 Unauthorized');
     if (url.includes('/charts/')) throw new Error('403 kein Chart-Recht');
     return { currency: 'EUR', metrics: [{ id: 'mrr', value: 33 }, { id: 'revenue', value: 99 }] };
   };
-  const r = await fetchData({ fetchJSON });
+  const r = await fetchData({ cfg, fetchJSON });
   assert.equal(r.extra.mrr, 33);
   assert.equal(r.extra.projects.length, 1);
   assert.match(r.note, /Nicht abrufbar: Projekt 2/);
@@ -295,5 +293,18 @@ test('RevenueCat: ein kaputtes Projekt blockiert das andere nicht', async () => 
   // Das erfolgreiche Projekt steht einzeln in der Liste, damit die Übersicht zeigen kann,
   // welche App überhaupt zählt.
   assert.deepEqual(r.extra.projects.map((p) => p.label), ['Projekt 1']);
-  for (const [k, v] of Object.entries(alt)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+});
+
+test('Quellen: eingerichtet nur mit vollständiger Konto-Konfiguration', async () => {
+  const { SOURCES, FIELDS } = await import('../sources/index.js');
+  const alt = process.env.GOOGLE_CLIENT_ID;
+  process.env.GOOGLE_CLIENT_ID = 'x'; process.env.GOOGLE_CLIENT_SECRET = 'y';
+  const by = Object.fromEntries(SOURCES.map((s) => [s.meta.id, s]));
+  assert.ok(!by.wise.configured({}));
+  assert.ok(by.wise.configured({ WISE_API_TOKEN: 't', WISE_PROFILE_ID: '1' }));
+  assert.ok(by.admob.configured({ ADMOB_PUBLISHER_ID: 'pub-1' }));
+  assert.ok(!by.appstore.configured({ ASC_KEY_ID: 'k' }));
+  // Jedes Pflichtfeld einer Quelle ist auch ein Formularfeld.
+  for (const s of SOURCES) for (const k of s.meta.needs) assert.ok(FIELDS.has(k), `${s.meta.id}: ${k} fehlt in fields`);
+  if (alt === undefined) delete process.env.GOOGLE_CLIENT_ID; else process.env.GOOGLE_CLIENT_ID = alt;
 });

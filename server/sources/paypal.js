@@ -1,21 +1,27 @@
 // PayPal: Kontostand (Reporting API, braucht "Transaction Search" in der PayPal-App).
 import { getJSON } from '../http.js';
 
-export const meta = { id: 'paypal', label: 'PayPal', art: 'Kontostand', kind: 'balance', needs: ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET'] };
+export const meta = { id: 'paypal', label: 'PayPal', art: 'Kontostand', kind: 'balance', needs: ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET'],
+  help: 'developer.paypal.com → Apps & Credentials → Live → App anlegen, Feature „Transaction Search" aktivieren.',
+  fields: [
+    { key: 'PAYPAL_CLIENT_ID', label: 'Client-ID' },
+    { key: 'PAYPAL_CLIENT_SECRET', label: 'Secret', secret: true },
+    { key: 'PAYPAL_ENV', label: 'Umgebung', optional: true, hint: 'live (Standard) oder sandbox' },
+  ] };
 
-export function configured() {
-  return !!(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
+export function configured(cfg = {}) {
+  return !!(cfg.PAYPAL_CLIENT_ID && cfg.PAYPAL_CLIENT_SECRET);
 }
 
-const host = () => (process.env.PAYPAL_ENV === 'sandbox' ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com');
+const host = (cfg) => (cfg.PAYPAL_ENV === 'sandbox' ? 'https://api-m.sandbox.paypal.com' : 'https://api-m.paypal.com');
 
-export async function fetchData() {
-  const basic = Buffer.from(`${process.env.PAYPAL_CLIENT_ID}:${process.env.PAYPAL_CLIENT_SECRET}`).toString('base64');
-  const tok = await getJSON(`${host()}/v1/oauth2/token`, {
+export async function fetchData({ cfg = {} } = {}) {
+  const basic = Buffer.from(`${cfg.PAYPAL_CLIENT_ID}:${cfg.PAYPAL_CLIENT_SECRET}`).toString('base64');
+  const tok = await getJSON(`${host(cfg)}/v1/oauth2/token`, {
     method: 'POST', headers: { authorization: `Basic ${basic}`, 'content-type': 'application/x-www-form-urlencoded' },
     body: 'grant_type=client_credentials',
   });
-  const res = await getJSON(`${host()}/v1/reporting/balances`, { headers: { authorization: `Bearer ${tok.access_token}` } });
+  const res = await getJSON(`${host(cfg)}/v1/reporting/balances`, { headers: { authorization: `Bearer ${tok.access_token}` } });
   const balances = (res.balances || []).map((b) => ({ amount: Number(b.total_balance?.value ?? 0), currency: b.total_balance?.currency_code || b.currency }));
   return { currency: balances[0]?.currency || null, asOf: res.as_of_time || new Date().toISOString(), daily: [], balance: null, balances, extra: {}, note: null };
 }

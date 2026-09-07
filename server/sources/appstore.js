@@ -6,14 +6,21 @@ import { getBuffer, ymd, daysAgo } from '../http.js';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 
 export const meta = { id: 'appstore', label: 'App Store', art: 'Erlöse (Sales) + Auszahlung (Finance)', kind: 'payout',
-  needs: ['ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_PRIVATE_KEY', 'ASC_VENDOR_NUMBER'] };
+  needs: ['ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_PRIVATE_KEY', 'ASC_VENDOR_NUMBER'],
+  help: 'App Store Connect → Nutzer und Zugriff → Integrationen → App Store Connect API → Team-Schlüssel mit Rolle „Finance" erzeugen.',
+  fields: [
+    { key: 'ASC_KEY_ID', label: 'Key-ID' },
+    { key: 'ASC_ISSUER_ID', label: 'Issuer-ID', hint: 'steht über der Schlüsselliste' },
+    { key: 'ASC_PRIVATE_KEY', label: 'Privater Schlüssel (.p8)', secret: true, multiline: true, hint: 'Inhalt der .p8-Datei einfügen (mit BEGIN/END-Zeilen) oder base64-kodiert' },
+    { key: 'ASC_VENDOR_NUMBER', label: 'Vendor-Nummer', hint: 'Zahlungen und Finanzberichte → oben links' },
+  ] };
 
-export function configured() {
-  return !!(process.env.ASC_KEY_ID && process.env.ASC_ISSUER_ID && process.env.ASC_PRIVATE_KEY && process.env.ASC_VENDOR_NUMBER);
+export function configured(cfg = {}) {
+  return !!(cfg.ASC_KEY_ID && cfg.ASC_ISSUER_ID && cfg.ASC_PRIVATE_KEY && cfg.ASC_VENDOR_NUMBER);
 }
 
-function privateKey() {
-  const raw = process.env.ASC_PRIVATE_KEY.trim();
+export function privateKey(cfg) {
+  const raw = String(cfg.ASC_PRIVATE_KEY || '').trim();
   return raw.startsWith('-----') ? raw.replace(/\\n/g, '\n') : Buffer.from(raw, 'base64').toString('utf8');
 }
 
@@ -47,16 +54,16 @@ export function zusammenfassen(liste) {
   return [...anzahl].map(([t, n]) => (n > 1 ? `${n}× ${t}` : t)).join(' | ');
 }
 
-async function report(path, filter) {
-  const jwt = makeJwt({ kid: process.env.ASC_KEY_ID, iss: process.env.ASC_ISSUER_ID, key: privateKey() });
+async function report(cfg, path, filter) {
+  const jwt = makeJwt({ kid: cfg.ASC_KEY_ID, iss: cfg.ASC_ISSUER_ID, key: privateKey(cfg) });
   const buf = await getBuffer(reportUrl(path, filter), {
     headers: { authorization: `Bearer ${jwt}`, accept: 'application/a-gzip' },
   });
   return (buf[0] === 0x1f && buf[1] === 0x8b ? zlib.gunzipSync(buf) : buf).toString('utf8');
 }
 
-export async function fetchData({ days = 14, knownDates = new Set(), knownMonths = new Set() } = {}) {
-  const vendor = process.env.ASC_VENDOR_NUMBER;
+export async function fetchData({ cfg = {}, days = 14, knownDates = new Set(), knownMonths = new Set() } = {}) {
+  const vendor = cfg.ASC_VENDOR_NUMBER;
   const daily = [], payouts = [], apps = [], errors = [];
   let currency = null;
 
@@ -65,7 +72,7 @@ export async function fetchData({ days = 14, knownDates = new Set(), knownMonths
     const date = ymd(daysAgo(i));
     if (knownDates.has(date) && i > 3) continue;
     try {
-      const tsv = await report('salesReports', { 'filter[frequency]': 'DAILY', 'filter[reportSubType]': 'SUMMARY',
+      const tsv = await report(cfg, 'salesReports', { 'filter[frequency]': 'DAILY', 'filter[reportSubType]': 'SUMMARY',
         'filter[reportType]': 'SALES', 'filter[vendorNumber]': vendor, 'filter[reportDate]': date });
       const sums = sumSales(tsv);
       for (const [cur, amount] of Object.entries(sums)) { daily.push({ date, amount, currency: cur }); currency = currency || cur; }
@@ -83,7 +90,7 @@ export async function fetchData({ days = 14, knownDates = new Set(), knownMonths
     const month = d.toISOString().slice(0, 7);
     if (knownMonths.has(month)) continue;
     try {
-      const tsv = await report('financeReports', { 'filter[regionCode]': 'ZZ', 'filter[reportType]': 'FINANCIAL',
+      const tsv = await report(cfg, 'financeReports', { 'filter[regionCode]': 'ZZ', 'filter[reportType]': 'FINANCIAL',
         'filter[vendorNumber]': vendor, 'filter[reportDate]': month });
       for (const [cur, amount] of Object.entries(sumFinance(tsv))) payouts.push({ month, amount, currency: cur, label: `App-Store-Auszahlung Fiskalmonat ${month}` });
     } catch (e) {

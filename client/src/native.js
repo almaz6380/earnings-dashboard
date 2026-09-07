@@ -40,6 +40,18 @@ export function beiZurueck(fn) {
   return () => { h.then((l) => l.remove()).catch(() => {}); };
 }
 
+// Rücksprung per URL-Schema (einnahmen://google?…), z. B. nach dem Google-Login im System-Browser.
+export function beiAppLink(fn) {
+  if (!NATIV) return () => {};
+  const h = App.addListener('appUrlOpen', ({ url }) => fn(url));
+  return () => { h.then((l) => l.remove()).catch(() => {}); };
+}
+
+// Das Browser-Sheet schließen (iOS; auf Android schließt es der Rücksprung selbst).
+export async function browserSchliessen() {
+  if (NATIV) await Browser.close().catch(() => {});
+}
+
 // Externe Seite öffnen: in der App im System-Browser-Sheet, im Web als neuer Tab.
 export async function extern(url) {
   if (NATIV) { await Browser.open({ url, presentationStyle: 'popover' }); return; }

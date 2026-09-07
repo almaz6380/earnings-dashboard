@@ -1,6 +1,7 @@
-# Einnahmen-Dashboard
+# Einnahmen
 
-Privates Dashboard, das alle App-Einnahmen an einer Stelle in Euro zeigt:
+Dienst und App, die alle App-Einnahmen an einer Stelle in einer Währung zeigen. Jeder legt ein Konto an,
+verbindet seine eigenen Quellen und sieht nur seine Zahlen:
 
 | Quelle | Was | Zugang |
 |---|---|---|
@@ -11,24 +12,27 @@ Privates Dashboard, das alle App-Einnahmen an einer Stelle in Euro zeigt:
 | App Store | Tageserlöse (Sales) + tatsächliche Auszahlung je Fiskalmonat | API-Key mit Rolle Finance |
 | Wise, PayPal | Kontostände | API-Token bzw. Client-ID/Secret |
 | Wechselkurse | EZB-Kurse über frankfurter.app | keiner |
-| Telegram / ntfy | tägliche Zusammenfassung aufs Handy | Bot-Token bzw. Topic |
+| Telegram / ntfy | tägliche Zusammenfassung aufs Handy | Chat-ID bzw. Topic im Konto |
 
-Jede Quelle ist optional. Was fehlt, steht im Tab „Quellen“.
+Jede Quelle ist optional und wird im Tab „Einrichten" mit den eigenen Zugangsdaten verbunden. Die Zugangsdaten
+liegen AES-verschlüsselt auf dem Server, werden nie angezeigt und nur lesend genutzt.
 
 Technik: Node/Express lokal, auf Vercel als Serverless-Funktionen (`api/`), React + Vite + recharts
 (`client/`), Speicher lokal als JSON in `data/` oder in der Supabase-Tabelle `earnings_kv`.
-Derselbe Client läuft als native App für iPhone und Android (Capacitor, `client/ios`, `client/android`),
-siehe [docs/APP-STORE.md](docs/APP-STORE.md).
+Derselbe Client läuft als native App für iPhone und Android (Capacitor, `client/ios`, `client/android`).
+Alles zum Betrieb als öffentlicher Dienst und zur Store-Einreichung: [docs/APP-STORE.md](docs/APP-STORE.md).
 
 ## Schnellstart lokal
 
 ```bash
 npm install
-cp .env.example .env      # ausfüllen, mindestens DASHBOARD_PASSWORD, SESSION_SECRET, TOKEN_ENC_KEY
-npm run dev               # http://localhost:5173
-npm test                  # Parser, Auth, Verschlüsselung, Zusammenfassung
-npm run collect           # ein Sammellauf ohne Server
+cp .env.example .env      # ausfüllen, mindestens SESSION_SECRET, TOKEN_ENC_KEY
+npm run dev               # http://localhost:5173 -> Konto erstellen, Quellen eintragen
+npm test                  # Parser, Auth, Konten, Verschlüsselung, Zusammenfassung
+npm run collect           # Sammellauf für alle Konten ohne Server (node server/cli.js collect [email])
 ```
+
+Altes Ein-Nutzer-Dashboard (Keys in `.env`) übernehmen: `node server/cli.js migrate deine@mail.de <passwort>`.
 
 Zufallsstrings für die Secrets: `openssl rand -hex 32`.
 
@@ -37,6 +41,7 @@ Zufallsstrings für die Secrets: `openssl rand -hex 32`.
 1. Neues Vercel-Projekt aus diesem Repo, Root = Projektordner. `vercel.json` bringt Region, Build und Cron mit.
 2. Supabase: `supabase.sql` einmal im SQL-Editor ausführen (die Tabelle darf neben anderen Tabellen liegen).
 3. Env-Variablen in Vercel eintragen (alle aus `.env.example`, die du nutzt). `PUBLIC_URL` ist optional, die App leitet sie sonst aus der Anfrage ab.
+   Der Google-OAuth-Client gehört dem Betreiber und gilt für alle Nutzer (Zustimmungsbildschirm „In production", Scopes verifizieren lassen).
 4. Deploy. Danach Env-Änderungen wirken erst nach erneutem Deploy.
 5. Cron: `vercel.json` ruft `/api/collect` täglich um 06:00 UTC auf. Vercel schickt dabei `Authorization: Bearer <CRON_SECRET>`,
    also `CRON_SECRET` setzen. Alternativ cron-job.org auf `https://<app>/api/collect?secret=<CRON_SECRET>`.
@@ -49,12 +54,16 @@ npm run app:android    # dito mit Android Studio
 npm run app:version -- 1.0.1   # Version + Build-Nummer in beiden Projekten setzen
 ```
 
-Die App fragt beim ersten Start nach der Adresse des Dashboards (`https://…`) und dem Passwort und spricht danach
-per Bearer-Token mit `/api/*`. Store-Texte liegen in `store/listing.md`, die Datenschutzerklärung wird unter
-`/datenschutz.html` mit deployt. Schritt-für-Schritt-Checkliste für Konten, Signierung, Screenshots und Einreichung:
-[docs/APP-STORE.md](docs/APP-STORE.md).
+Die Adresse des Dienstes wird beim Bauen eingebaut (`client/.env.local`, `VITE_SERVER_URL`); ohne sie fragt die App
+danach (Selbst-Hosting). Nutzer registrieren sich in der App und sprechen danach per Bearer-Token mit `/api/*`.
+Store-Texte in `store/listing.md`, Datenschutzerklärung und Nutzungsbedingungen unter `/datenschutz.html` und
+`/nutzungsbedingungen.html` (Platzhalter füllen). Checkliste für Konten, Google-Verifizierung, Signierung,
+Screenshots und Einreichung: [docs/APP-STORE.md](docs/APP-STORE.md).
 
 ## Quellen einrichten
+
+Alle Werte werden im Tab „Einrichten" eingetragen (nicht mehr als Umgebungsvariablen). Die Namen unten sind die
+Feldbezeichnungen in der App; nur der Google-OAuth-Client (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) bleibt beim Betreiber.
 
 ### RevenueCat
 Dashboard → Projekt → Project settings → API keys → **+ New secret API key** mit Berechtigung
@@ -75,9 +84,9 @@ jede App einzeln.
    (kein Review nötig, solange nur du die App nutzt). Dann bleibt die Verbindung dauerhaft.
 4. Anmeldedaten → OAuth-Client-ID → *Webanwendung*. Autorisierte Weiterleitungs-URIs:
    `https://<app>.vercel.app/api/google/callback` und `http://localhost:3001/api/google/callback`.
-   Die genaue URI zeigt das Dashboard im Tab „Quellen“ unter „Google verbinden“.
+   Die genaue URI ist `https://<domain>/api/google/callback`.
    → `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
-5. Im Dashboard, Tab „Quellen“ → **Google verbinden**. Der Refresh-Token wird verschlüsselt gespeichert.
+5. In der App, Tab „Einrichten" → **Google verbinden**. Der Refresh-Token wird je Konto verschlüsselt gespeichert.
 
 Dazu je Dienst:
 - **AdMob:** Publisher-ID (`pub-…`) aus AdMob → Einstellungen → Kontoinformationen → `ADMOB_PUBLISHER_ID`.
@@ -102,9 +111,9 @@ Einstellungen → API-Token → *Read only*. Profil-ID über `GET https://api.wi
 Features **Transaction Search** aktivieren. → `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_ENV=live`.
 
 ### Tägliche Meldung
-- Telegram: Bot bei @BotFather anlegen, dem Bot schreiben, Chat-ID über `https://api.telegram.org/bot<TOKEN>/getUpdates`.
-  → `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
-- ntfy: App installieren, Topic abonnieren (lang und zufällig, ist das einzige „Passwort“). → `NTFY_TOPIC`.
+- Telegram: der Betreiber legt einen Bot bei @BotFather an (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_NAME`); jeder Nutzer
+  schreibt dem Bot und trägt seine Chat-ID (via @userinfobot) im Tab „Konto" ein.
+- ntfy: App installieren, Topic abonnieren (lang und zufällig, ist das einzige „Passwort") und im Tab „Konto" eintragen.
 
 Die Meldung geht nur beim Cron-Lauf raus, nicht beim Klick auf „Aktualisieren“.
 
@@ -126,11 +135,12 @@ Die Meldung geht nur beim Cron-Lauf raus, nicht beim Klick auf „Aktualisieren�
 
 ## Sicherheit
 
-- Dashboard hinter Passwort (`DASHBOARD_PASSWORD`), Cookie HttpOnly + signiert (`SESSION_SECRET`), 30 Tage gültig,
-  5 Fehlversuche → 15 Minuten Sperre.
-- Google-Refresh-Token liegt AES-256-GCM-verschlüsselt (`TOKEN_ENC_KEY`) im Speicher. Ändert sich der Schlüssel,
-  einmal neu verbinden.
-- Alle Keys nur als Umgebungsvariablen. `.env` und `data/` sind gitignored. Nie Keys in Chats oder Commits.
+- Konten mit E-Mail + Passwort (scrypt-Hash, mind. 10 Zeichen), Sitzung als signiertes Token (`SESSION_SECRET`),
+  30 Tage gültig, Passwortwechsel macht alte Sitzungen ungültig. 5 Fehlversuche je IP+E-Mail → 15 Minuten Sperre,
+  10 Registrierungen je IP und 15 Minuten. Konto-Löschung in der App entfernt alles.
+- Zugangsdaten der Quellen und Google-Refresh-Tokens liegen je Konto AES-256-GCM-verschlüsselt (`TOKEN_ENC_KEY`) im
+  Speicher und werden nie im Klartext zurückgegeben. Ändert sich der Schlüssel, müssen alle neu eintragen.
+- Betreiber-Secrets nur als Umgebungsvariablen. `.env` und `data/` sind gitignored. Nie Keys in Chats oder Commits.
 - Alle Zugriffe sind lesend. Das Dashboard kann nichts auszahlen oder ändern.
 - Native App: dasselbe Token als `Authorization: Bearer`, gespeichert in den App-Preferences (kein Cloud-Backup),
   CORS nur für die App-Origins (`server/cors.js`, weitere über `APP_ORIGINS`).
@@ -141,10 +151,10 @@ Die Meldung geht nur beim Cron-Lauf raus, nicht beim Klick auf „Aktualisieren�
 server/   Express (lokal) + Handler, die auch als Vercel-Funktionen laufen
   sources/   eine Datei je Quelle: configured() + fetchData()
   collect.js Sammellauf, summary.js Kennzahlen, notify.js Meldung, fx.js Kurse
-  auth.js Passwort/Cookie, crypto.js Token-Verschlüsselung, google/oauth.js Login
-  cors.js Freigabe für die native App
+  users.js Konten + verschlüsselte Konfiguration, auth.js Sitzungen, crypto.js Verschlüsselung
+  google/oauth.js Google-Login je Konto, cors.js Freigabe für die native App, mail.js Passwort vergessen
 api/      Vercel-Einstiege (nur Re-Exports)
-client/   React-Dashboard: Übersicht, Apps, Verlauf, Quellen
+client/   React-Client: Übersicht, Apps, Verlauf, Einrichten, Konto
   api.js Server-Adresse + Token (App), native.js Capacitor-Hooks
   ios/ android/ native Projekte (Capacitor), assets/ Icon- und Splash-Quellen
 store/    Store-Texte und Review-Hinweise, docs/APP-STORE.md Release-Checkliste

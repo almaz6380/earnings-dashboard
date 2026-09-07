@@ -1,20 +1,22 @@
 // Google Play: monatliche Earnings-Berichte (echte Auszahlungsbeträge) aus dem Cloud-Storage-Bucket.
 // Datei: earnings/earnings_YYYYMM-<id>.zip -> CSV mit "Amount (Merchant Currency)".
-import { getAccessToken } from '../google/oauth.js';
+import { googleConfigured } from '../google/oauth.js';
 import { getJSON, getBuffer } from '../http.js';
 import { unzip } from '../zip.js';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 
 export const meta = { id: 'play', label: 'Google Play', art: 'Auszahlung (tatsächlich)', kind: 'payout',
-  needs: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'PLAY_GCS_BUCKET'], google: true };
+  needs: ['PLAY_GCS_BUCKET'], google: true,
+  help: 'Braucht die Google-Verbindung oben. Play Console → Berichte herunterladen → Finanzberichte → „Cloud Storage-URI kopieren". Dein Google-Konto braucht in der Play Console „Finanzdaten ansehen".',
+  fields: [{ key: 'PLAY_GCS_BUCKET', label: 'Cloud-Storage-Bucket', hint: 'nur der Name: pubsite_prod_rev_0123456789' }] };
 
-export function configured() {
-  return !!(process.env.PLAY_GCS_BUCKET && process.env.GOOGLE_CLIENT_ID);
+export function configured(cfg = {}) {
+  return !!(cfg.PLAY_GCS_BUCKET && googleConfigured());
 }
 
 // fetchJSON/fetchBuffer/holeToken sind einspeisbar, damit Tests ohne Netz laufen (wie in revenuecat.js).
-export async function fetchData({ months = 2, fetchJSON = getJSON, fetchBuffer = getBuffer, holeToken = getAccessToken } = {}) {
-  const bucket = process.env.PLAY_GCS_BUCKET.replace(/^gs:\/\//, '').replace(/\/.*$/, '');
+export async function fetchData({ cfg = {}, google, months = 2, fetchJSON = getJSON, fetchBuffer = getBuffer, holeToken = google?.token } = {}) {
+  const bucket = String(cfg.PLAY_GCS_BUCKET || '').replace(/^gs:\/\//, '').replace(/\/.*$/, '');
   const token = await holeToken();
   const auth = { headers: { authorization: `Bearer ${token}` } };
   const leer = (note) => ({ currency: null, asOf: new Date().toISOString(), daily: [], payouts: [], apps: [], balance: null, extra: {}, note });

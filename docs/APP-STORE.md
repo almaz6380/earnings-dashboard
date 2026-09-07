@@ -1,111 +1,116 @@
-# Einnahmen als App im App Store und bei Google Play
+# Einnahmen als öffentlicher Dienst im App Store und bei Google Play
 
-Die native App ist der bestehende React-Client, verpackt mit [Capacitor](https://capacitorjs.com) 8.
-Sie liegt in `client/ios` und `client/android`, spricht mit dem eigenen Server (Vercel) über
-`Authorization: Bearer` statt Cookie und bringt Icon, Splash, Datenschutzseite und Store-Texte mit.
+Die App ist ein Client für den Dienst, den du betreibst: Nutzer legen ein Konto an, tragen ihre eigenen
+Zugangsdaten in der App ein, und dein Server ruft für jedes Konto die Berichte ab. Technik: React-Client mit
+[Capacitor](https://capacitorjs.com) 8 in `client/ios` und `client/android`, API als Vercel-Funktionen, Speicher in Supabase.
 
-## Was schon im Repo fertig ist
+## Was im Repo fertig ist
 
 | Teil | Wo | Stand |
 |---|---|---|
-| Native Projekte iOS + Android | `client/ios`, `client/android` | angelegt, Icons und Splash generiert, dunkles Design, nur hochkant (iPhone) |
-| Token-Anmeldung + CORS für die App | `server/auth.js`, `server/cors.js` | fertig, getestet (`npm test`) |
-| Login mit Server-Adresse in der App | `client/src/App.jsx`, `client/src/api.js` | fertig |
-| Neu laden beim Zurückkehren, Android-Zurück-Taste, Statusleiste, Splash | `client/src/native.js` | fertig |
-| Safe Areas (Notch, Home-Indikator) | `client/src/styles.css`, `index.html` | fertig |
-| PWA-Manifest + Web-Icons | `client/public/` | fertig (Homescreen im Browser funktioniert auch ohne Store) |
-| Datenschutzerklärung | `client/public/datenschutz.html` → `https://<domain>/datenschutz.html` | fertig, Pflicht-URL für beide Stores |
+| Konten: Registrierung, Login, Passwort ändern/vergessen, Konto löschen | `server/users.js`, `server/auth.js`, `server/handlers/*` | fertig, getestet |
+| Zugangsdaten je Konto, AES-verschlüsselt, nie zurückgegeben | `server/users.js` (`setConfig`, `maskConfig`), `server/handlers/config.js` | fertig |
+| Quellen lesen aus der Konto-Konfiguration, Google-Login je Konto | `server/sources/*`, `server/google/oauth.js` | fertig |
+| Sammellauf je Konto und per Cron über alle Konten mit Zeitbudget | `server/collect.js` | fertig |
+| Tägliche Meldung je Konto (ntfy-Topic, Telegram-Chat-ID) | `server/notify.js` | fertig |
+| Native App: Login/Registrieren, Einrichten-Formulare, Konto-Tab, Deep Link `einnahmen://` | `client/src/*` | fertig |
+| Rechtstexte mit Platzhaltern | `client/public/datenschutz.html`, `nutzungsbedingungen.html` | Platzhalter füllen |
 | Store-Texte, Review-Hinweise, Datenschutz-Fragebögen | `store/listing.md` | fertig zum Kopieren |
-| Versionen setzen | `npm run app:version -- 1.0.1` | setzt versionName/versionCode und MARKETING_VERSION/CURRENT_PROJECT_VERSION |
-| CI | `.github/workflows/android.yml`, `ios.yml` | Debug-APK bei jedem Push, signiertes AAB bei Tag `v*`, iOS-Kompilierprüfung |
+| Migration deines alten Ein-Nutzer-Dashboards | `node server/cli.js migrate <email> <passwort>` | fertig |
+| CI | `.github/workflows/android.yml`, `ios.yml` | Debug-APK je Push, AAB bei Tag `v*`, iOS-Kompilierprüfung |
 
 ## Was nur du machen kannst (Checkliste)
 
 ### 0. Konten und Kosten
-- [ ] **Apple Developer Program**: 99 USD/Jahr, https://developer.apple.com/programs/enroll/. Freischaltung dauert 1–2 Tage.
-- [ ] **Google Play Console**: einmalig 25 USD, https://play.google.com/console/signup. Neue Privatkonten müssen seit 2024 vor
-      dem ersten Produktions-Release einen **geschlossenen Test mit 12 Testern über 14 Tage** durchlaufen.
-- [ ] Einen Mac mit Xcode 16+ (für iOS gibt es keinen Weg daran vorbei; für Android reicht jedes System mit Android Studio).
+- [ ] **Apple Developer Program**: 99 USD/Jahr, https://developer.apple.com/programs/enroll/ (1–2 Tage Freischaltung).
+- [ ] **Google Play Console**: einmalig 25 USD. Neue Privatkonten müssen vor dem ersten Produktions-Release einen
+      **geschlossenen Test mit 12 Testern über 14 Tage** durchlaufen.
+- [ ] Ein Mac mit Xcode 16+ für den iOS-Build.
+- [ ] Eine **Domain** für den Dienst (z. B. `einnahmen.example`) – Prüfer und Nutzer brauchen eine feste Adresse.
 
-### 1. Bundle-ID festlegen (vor dem ersten Upload, danach nicht mehr änderbar)
-Aktuell: `app.einnahmen.dashboard`. Wenn du eine eigene Domain-basierte ID willst (z. B. `de.deinname.einnahmen`):
+### 1. Server aufsetzen (der eigentliche Dienst)
+- [ ] Vercel-Projekt aus dem Repo, `supabase.sql` in Supabase ausführen, Domain verbinden.
+- [ ] Env setzen: `SESSION_SECRET`, `TOKEN_ENC_KEY`, `CRON_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `PUBLIC_URL`.
+- [ ] **Google OAuth-Client** (`GOOGLE_CLIENT_ID/SECRET`), Weiterleitungs-URI `https://<domain>/api/google/callback`.
+      Für fremde Nutzer muss der Zustimmungsbildschirm auf **„In production"** stehen. Die Scopes `admob.readonly`,
+      `adsense.readonly` und `devstorage.read_only` sind *sensitive*: Google verlangt eine **Verifizierung**
+      (Datenschutz-URL, Homepage, Demo-Video der OAuth-Nutzung, Begründung je Scope). Dauer 2–6 Wochen. Bis dahin
+      können max. 100 Testnutzer verbinden, die du im Zustimmungsbildschirm einträgst.
+- [ ] Optional: `RESEND_API_KEY` + `MAIL_FROM` (Passwort vergessen), `TELEGRAM_BOT_TOKEN` + `TELEGRAM_BOT_NAME`.
+- [ ] `SIGNUP=closed` setzen, falls du Registrierungen zeitweise stoppen willst.
+- [ ] Bestehendes Dashboard übernehmen: alte Quellen-Variablen in `.env` lassen und einmal
+      `node server/cli.js migrate deine@mail.de <passwort>` laufen lassen (lokal gegen dieselbe Supabase-DB).
+- [ ] Prüfen: `https://<domain>/datenschutz.html` und `/nutzungsbedingungen.html` – **Platzhalter in eckigen
+      Klammern füllen** (Name, Anschrift, Kontakt, Supabase-Region, geltendes Recht).
+- [ ] Cron: `vercel.json` ruft `/api/collect` täglich auf; das Zeitbudget ist 50 s (Hobby-Plan: max 60 s). Bei vielen
+      Konten auf den Pro-Plan wechseln (`maxDuration` 300) oder den Cron mehrmals täglich laufen lassen – jeder Lauf
+      nimmt sich die Konten vor, die am längsten warten.
+
+### 2. App bauen
+- [ ] `client/.env.local` mit `VITE_SERVER_URL=https://<domain>` anlegen (Vorlage `client/.env.example`).
+      Ohne sie fragt die App nach einer Server-Adresse – gut für Selbst-Hoster, nicht für den Store.
+- [ ] Bundle-ID festlegen (aktuell `app.einnahmen.dashboard`, nach dem ersten Upload nicht mehr änderbar). Ändern:
+      `appId` in `client/capacitor.config.json`, dann `cd client && rm -rf ios android && npx cap add ios && npx cap add android
+      && npm run assets` und die Anpassungen aus den Commits „Native App" erneut anwenden (Info.plist: URL-Schema,
+      Encryption-Flag, Dark; AndroidManifest: URL-Schema, `allowBackup=false`; styles.xml).
+- [ ] `npm install && npm run app:ios` / `npm run app:android`.
+- [ ] In Xcode: Signing & Capabilities → Team wählen.
+- [ ] Auf Geräten testen: Registrieren, Quelle eintragen, „Google verbinden" (Browser öffnet sich, springt per
+      `einnahmen://google` zurück), Aktualisieren, Passwort ändern, Konto löschen, Abmelden.
+
+### 3. Review-Konto mit Beispieldaten
+Prüfer sollen keine leere Übersicht sehen. Lokal gegen die Produktions-DB (Env aus Vercel in `.env`):
 ```bash
-# in client/capacitor.config.json "appId" ändern, dann Plattformen neu erzeugen:
-cd client && rm -rf ios android && npx cap add ios && npx cap add android && npm run assets
+node -e "
+import('./server/users.js').then(async ({ createUser, ukey }) => {
+  const { saveJSON } = await import('./server/store.js');
+  const u = await createUser({ email: 'review@<domain>', password: '<Review-Passwort>' });
+  const daily = {}; for (let i = 1; i <= 60; i++) { const d = new Date(Date.now() - i * 864e5).toISOString().slice(0, 10); daily[d] = { EUR: Math.round((20 + Math.random() * 30) * 100) / 100 }; }
+  await saveJSON(ukey(u.id, 'history'), { daily: { admob: daily }, payouts: {}, balances: {}, sources: { admob: { status: 'ok', lastOk: new Date().toISOString() } }, apps: {} });
+  await saveJSON(ukey(u.id, 'latest'), { collectedAt: new Date().toISOString(), ms: 1, results: { admob: { status: 'ok' } } });
+  console.log('ok', u.email);
+});"
 ```
-und die Anpassungen aus dem Commit „Native App" (Info.plist, styles.xml, AndroidManifest) erneut anwenden.
-
-### 2. Server vorbereiten
-- [ ] Aktuellen Stand auf Vercel deployen (die Token-Anmeldung braucht den neuen Server).
-- [ ] Prüfen: `https://<domain>/datenschutz.html` ist erreichbar.
-- [ ] Optional `APP_ORIGINS` setzen, falls die App gegen eine zusätzliche Domain sprechen soll.
-- [ ] Für die Store-Prüfung eine **Demo-Instanz** anlegen (zweites Vercel-Projekt aus demselben Repo, eigenes
-      `DASHBOARD_PASSWORD`, Quellen leer). Prüfer brauchen Adresse + Passwort, siehe `store/listing.md`.
-
-### 3. Lokal bauen und testen
-```bash
-npm install
-npm run app:icons        # nur nötig, wenn du die SVGs in client/assets geändert hast
-npm run app:ios          # baut den Client, synchronisiert, öffnet Xcode
-npm run app:android      # dito für Android Studio
-```
-- [ ] In Xcode: Signing & Capabilities → Team auswählen (Automatic Signing).
-- [ ] Auf echtem iPhone und Android-Gerät: Anmelden mit Server-Adresse, alle vier Tabs, Ziehen zum Aktualisieren,
-      App in den Hintergrund und zurück (lädt neu), Abmelden, Android-Zurück-Taste.
-- [ ] „Google verbinden" öffnet den Browser (der OAuth-Rückweg landet im Web-Dashboard; das ist so gewollt).
 
 ### 4. Screenshots und Grafiken
-- [ ] iPhone 6,9" und 6,5", iPad 13" (Simulator, ⌘S). Google Play: mindestens 2 Telefon-Screenshots + Feature-Grafik 1024×500.
-- [ ] Motive und Größen stehen in `store/listing.md`.
+- [ ] Motive und Größen in `store/listing.md`. Review-Konto verwenden, keine echten Zahlen.
 
 ### 5. iOS einreichen
-- [ ] App Store Connect → Meine Apps → **+** → Name „Einnahmen", Bundle-ID, SKU (z. B. `einnahmen-1`).
-- [ ] Xcode: Product → **Archive** → Distribute → App Store Connect → Upload. Alternativ Xcode Cloud aus Xcode heraus einrichten.
-- [ ] TestFlight: erst selbst installieren, dann einreichen.
-- [ ] Store-Eintrag ausfüllen (Texte aus `store/listing.md`), App-Datenschutz: **„Daten werden nicht erfasst"**.
-- [ ] Review-Hinweise mit Demo-Server + Passwort. Ohne funktionierenden Testzugang folgt eine Ablehnung (2.1).
-- [ ] Altersfreigabe 4+, Preis kostenlos, Verfügbarkeit nach Wunsch (z. B. nur DACH).
-
-**Risiko, offen gesagt:** Apple lehnt Apps, die nur für den Entwickler selbst nützlich sind, gelegentlich nach
-Richtlinie 4.2 (Mindestfunktionalität) oder 3.2 ab. Das ist mit dem Selbst-Hosting-Argument („Client für einen
-Open-Source-Server, jeder Nutzer betreibt sein eigenes Backend") normalerweise zu entkräften; die Formulierung steht in
-`store/listing.md`. Falls es doch nicht klappt, sind **TestFlight** (bis 10.000 Tester, 90 Tage je Build) oder die
-**Unlisted App Distribution** (App nur per Link, Antrag bei Apple) die Alternativen ohne öffentliche Listung.
+- [ ] App Store Connect → Meine Apps → **+** → Name „Einnahmen", Bundle-ID, SKU.
+- [ ] Xcode: Product → **Archive** → Distribute → App Store Connect. Erst TestFlight, dann Einreichen.
+- [ ] Store-Eintrag (Texte aus `store/listing.md`), App-Datenschutz-Fragebogen wie dort beschrieben.
+- [ ] Review-Hinweise mit Review-Konto. Ohne Testzugang folgt eine Ablehnung (Richtlinie 2.1).
+- [ ] Konto-Löschung in der App ist Pflicht (5.1.1 v) – vorhanden, im Tab „Konto".
 
 ### 6. Android einreichen
-- [ ] Upload-Keystore erzeugen und **sicher wegsichern** (geht er verloren, ist die App nicht mehr aktualisierbar):
-      ```bash
-      keytool -genkeypair -v -keystore upload.keystore -alias upload -keyalg RSA -keysize 2048 -validity 10000
-      ```
-- [ ] Entweder lokal: Android Studio → Build → Generate Signed Bundle (AAB) mit diesem Keystore,
-      oder CI: die vier Secrets aus `android.yml` im Repo hinterlegen und ein Tag `v1.0.0` pushen → Artefakt `einnahmen-release-aab`.
-- [ ] Play Console → App erstellen → Play App Signing akzeptieren → AAB hochladen (erst **interner Test**).
-- [ ] Store-Eintrag, Datensicherheits-Formular („keine Daten erhoben"), Inhaltseinstufung, Zielgruppe (18+ oder „nicht für Kinder").
-- [ ] Geschlossener Test (12 Tester, 14 Tage, nur bei neuen Privatkonten) → Produktion beantragen.
+- [ ] Upload-Keystore erzeugen und **sicher wegsichern**:
+      `keytool -genkeypair -v -keystore upload.keystore -alias upload -keyalg RSA -keysize 2048 -validity 10000`
+- [ ] Lokal: Android Studio → Build → Generate Signed Bundle; oder CI: die vier Secrets aus `android.yml` hinterlegen und Tag `v1.0.0` pushen.
+- [ ] Play Console → App erstellen → AAB in den internen Test → Store-Eintrag, Datensicherheit, Inhaltseinstufung,
+      Zielgruppe 18+, **Kontolöschungs-URL** eintragen.
+- [ ] Geschlossener Test (12 Tester, 14 Tage) → Produktion.
 
-### 7. Jede weitere Version
-```bash
-npm run app:version -- 1.0.1     # Version hoch, Build-Nummer +1 in beiden Projekten
-git commit -am "App 1.0.1" && git tag v1.0.1 && git push --tags
-npm run app:ios                  # Archive + Upload in Xcode
-```
-Der Server ist abwärtskompatibel: alte App-Versionen laufen weiter, weil nur `/api/*` mit Token gesprochen wird.
+### 7. Betrieb
+- Registrierungen und letzte Läufe: `node server/cli.js users`.
+- Sammellauf von Hand: `node server/cli.js collect [email] [--notify]`.
+- Neue App-Version: `npm run app:version -- 1.0.1`, committen, Tag pushen, Archive/Upload.
+- Der Server ist abwärtskompatibel: ältere App-Versionen sprechen weiter mit `/api/*`.
 
-## Wie die App technisch funktioniert
+## Wie es technisch funktioniert
 
-- **Client in der App, API auf dem Server.** Der gebaute Client (`client/dist`) wird bei `cap sync` in die App kopiert.
-  Netzwerkanfragen gehen an die eingegebene Server-Adresse (`client/src/api.js`).
-- **Anmeldung:** `POST /api/login` mit `{ password, token: true }` liefert dasselbe signierte Token, das im Browser im
-  HttpOnly-Cookie liegt. Die App speichert es in den Capacitor Preferences und schickt es als `Authorization: Bearer`.
-  `server/auth.js` akzeptiert beides. Abmelden löscht das Token; ein 401 schickt zur Anmeldung zurück.
-- **CORS:** Die App-Origins (`capacitor://localhost`, `https://localhost`) sind in `server/cors.js` freigeschaltet, alle
-  Handler sind mit `withCors` umhüllt, OPTIONS-Preflights werden beantwortet. Weitere Origins per `APP_ORIGINS`.
-- **Google-OAuth:** Der Rückweg des Logins landet auf dem Web-Dashboard. Die App öffnet dafür den System-Browser; die
-  Verbindung wird serverseitig gespeichert und gilt danach überall.
-- **Nur HTTPS:** iOS (ATS) und Android blocken Klartext; die Login-Maske akzeptiert nur `https://`.
-- **Sicherheit auf dem Gerät:** Preferences liegen im App-Container, Android-Backup ist abgeschaltet
-  (`allowBackup="false"`), damit das Token nicht in die Cloud wandert.
-- **Kein Tracking, keine Push-Berechtigung** – die tägliche Meldung läuft weiter über Telegram/ntfy vom Server.
+- **Konten** liegen als `user:<id>` im Schlüssel-Wert-Speicher (`earnings_kv`), E-Mail-Index `email:<mail>`,
+  Nutzerdaten unter `u:<id>:history|latest|google_tokens`. Passwörter als scrypt-Hash.
+- **Sitzung:** Token `<id>.<pwv>.<exp>.<sig>`; `pwv` ist die Passwort-Version, ein Passwortwechsel macht alle
+  alten Tokens ungültig. Browser: HttpOnly-Cookie. App: Bearer-Header, Token in den Capacitor Preferences.
+- **Zugangsdaten** der Quellen: ein verschlüsseltes JSON je Konto (AES-256-GCM mit `TOKEN_ENC_KEY`). Die API gibt
+  nur „gesetzt" plus die letzten vier Zeichen zurück. Ändert sich `TOKEN_ENC_KEY`, müssen alle neu eintragen.
+- **Google:** ein OAuth-Client des Betreibers, ein Refresh-Token je Konto. Aus der App: `GET /api/google/link`
+  liefert eine Adresse mit Einmal-Ticket, der System-Browser führt den Login durch, der Callback springt per
+  `einnahmen://google?google=ok` zurück; im Web landet er auf `/?google=ok#einrichten`.
+- **Cron:** `/api/collect` mit `CRON_SECRET` läuft über alle Konten (die am längsten wartenden zuerst) bis das
+  Zeitbudget aufgebraucht ist; angemeldet läuft nur das eigene Konto.
+- **Rate-Limits:** 5 Fehlversuche je IP+E-Mail → 15 Minuten; 10 Registrierungen je IP und 15 Minuten.
+- **CORS** nur für die App-Origins (`server/cors.js`), Body-Limit 256 KB, nur HTTPS in der App.
 
 ## Nützliche Befehle
 
@@ -115,4 +120,5 @@ Der Server ist abwärtskompatibel: alte App-Versionen laufen weiter, weil nur `/
 | `npm run app:ios` / `npm run app:android` | dazu Xcode bzw. Android Studio öffnen |
 | `npm run app:icons` | Icons und Splash aus `client/assets/*.svg` neu erzeugen |
 | `npm run app:version -- 1.2.0 [build]` | Version und Build-Nummer setzen |
-| `cd client/android && ./gradlew assembleDebug` | Debug-APK ohne Android Studio |
+| `node server/cli.js users` | Konten auflisten |
+| `node server/cli.js migrate <email> <pw>` | altes Ein-Nutzer-Dashboard übernehmen |
