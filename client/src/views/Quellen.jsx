@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { fmtDate, SOURCE_ORDER } from '../format.js';
+import { api, apiUrl, NATIV } from '../api.js';
+import { extern } from '../native.js';
 
 export default function Quellen({ s, status, onChanged }) {
   const [busy, setBusy] = useState(false);
@@ -10,9 +12,21 @@ export default function Quellen({ s, status, onChanged }) {
   async function disconnect() {
     if (!confirm('Google-Verbindung wirklich trennen?')) return;
     setBusy(true);
-    await fetch('/api/google/disconnect', { method: 'POST', credentials: 'same-origin' });
+    await api('/api/google/disconnect', { method: 'POST' }).catch(() => {});
     setBusy(false);
     onChanged();
+  }
+
+  // Der Google-Login endet mit einer Weiterleitung auf das Web-Dashboard. In der App
+  // geht das darum über den System-Browser: dort einmal anmelden und verbinden,
+  // danach hier „Aktualisieren" - der Server merkt sich die Verbindung.
+  function GoogleKnopf({ label, primary }) {
+    const cls = `btn${primary ? ' primary' : ''}`;
+    if (NATIV) {
+      const ziel = `${status.webUrl || apiUrl('')}/#quellen`;
+      return <button className={cls} onClick={() => extern(ziel)}>{label} (im Browser)</button>;
+    }
+    return <a className={cls} href="/api/google/start">{label}</a>;
   }
 
   return (
@@ -26,14 +40,15 @@ export default function Quellen({ s, status, onChanged }) {
             <p>Verbunden{g.email ? ` als ${g.email}` : ''} seit {fmtDate(g.connectedAt)}.</p>
             {g.lastError && <p className="error">{g.lastError}</p>}
             <div className="btnrow">
-              <a className="btn" href="/api/google/start">Erneut verbinden</a>
+              <GoogleKnopf label="Erneut verbinden" />
               <button className="btn ghost" onClick={disconnect} disabled={busy}>Trennen</button>
             </div>
           </>
         ) : (
           <>
             <p className="hint">Einmal anmelden, dann liest das Dashboard AdMob, AdSense und Play-Finanzberichte nur lesend.</p>
-            <a className="btn primary" href="/api/google/start">Google verbinden</a>
+            <GoogleKnopf label="Google verbinden" primary />
+            {NATIV && <p className="hint small">Öffnet das Dashboard im Browser. Dort anmelden, „Google verbinden" tippen und danach hier „Aktualisieren".</p>}
             {g.redirectUri && <p className="hint small">Weiterleitungs-URI für den OAuth-Client: <code>{g.redirectUri}</code></p>}
           </>
         )}
@@ -63,6 +78,7 @@ export default function Quellen({ s, status, onChanged }) {
         <h2>System</h2>
         <table>
           <tbody>
+            {NATIV && <tr><td>Server</td><td>{apiUrl('')}</td></tr>}
             <tr><td>Speicher</td><td>{status.storage}</td></tr>
             <tr><td>Basiswährung</td><td>{status.baseCurrency}{s.fxDate ? ` · EZB-Kurse vom ${s.fxDate}` : ''}</td></tr>
             <tr><td>Summe</td><td>Werbung (AdMob, AdSense) + Abo-Umsatz {s.subsSource === 'revenuecat' ? 'laut RevenueCat (vor Store-Abzug)' : 'laut Store-Erlösen (App Store, Play)'}. Quellen melden mit 1–2 Tagen Verzug.</td></tr>
@@ -70,6 +86,7 @@ export default function Quellen({ s, status, onChanged }) {
             <tr><td>Benachrichtigung</td><td>{status.notify ? 'Telegram/ntfy aktiv' : 'keine (TELEGRAM_* oder NTFY_TOPIC setzen)'}</td></tr>
             <tr><td>Letzter Lauf</td><td>{status.latest ? `${fmtDate(status.latest.collectedAt)} (${status.latest.ms} ms)` : 'noch keiner'}</td></tr>
             {status.latest?.notify && <tr><td>Letzte Meldung</td><td>{JSON.stringify(status.latest.notify)}</td></tr>}
+            <tr><td>Datenschutz</td><td><a href={`${status.webUrl || ''}/datenschutz.html`} onClick={(e) => { if (NATIV) { e.preventDefault(); extern(`${status.webUrl || apiUrl('')}/datenschutz.html`); } }} target="_blank" rel="noreferrer">Datenschutzerklärung</a></td></tr>
           </tbody>
         </table>
       </div>

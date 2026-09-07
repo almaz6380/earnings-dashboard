@@ -10,9 +10,16 @@
     "build": "npm --prefix client run build",
     "collect": "node server/cli.js collect",
     "test": "node --test server/test/*.test.js",
-    "postinstall": "npm --prefix client install"
+    "postinstall": "npm --prefix client install",
+    "app:icons": "npm --prefix client run icons && npm --prefix client run assets",
+    "app:sync": "npm --prefix client run sync",
+    "app:ios": "npm --prefix client run sync && npm --prefix client run ios",
+    "app:android": "npm --prefix client run sync && npm --prefix client run android",
+    "app:version": "npm --prefix client run version --"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "concurrently": "^9.1.2",
     "dotenv": "^16.4.7",

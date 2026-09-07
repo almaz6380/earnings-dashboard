@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Einnahmen</string>
+    <string name="title_activity_main">Einnahmen</string>
+    <string name="package_name">app.einnahmen.dashboard</string>
+    <string name="custom_url_scheme">app.einnahmen.dashboard</string>
+</resources>

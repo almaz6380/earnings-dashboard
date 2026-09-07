@@ -42,8 +42,15 @@ export function parseCookies(header = '') {
   return out;
 }
 
+// Die native App (iOS/Android) hat keine Cookies über Origins hinweg. Sie schickt
+// dasselbe signierte Token stattdessen als "Authorization: Bearer <token>".
+export function bearerToken(req) {
+  const h = req.headers?.authorization || '';
+  return h.startsWith('Bearer ') ? h.slice(7).trim() : null;
+}
+
 export function isAuthed(req) {
-  return verifyToken(parseCookies(req.headers?.cookie)[COOKIE]);
+  return verifyToken(parseCookies(req.headers?.cookie)[COOKIE]) || verifyToken(bearerToken(req));
 }
 
 export function cookieHeader(value, { maxAgeSec, secure } = {}) {

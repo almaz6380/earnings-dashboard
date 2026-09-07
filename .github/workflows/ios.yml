@@ -1,0 +1,27 @@
+# Prüft, dass das iOS-Projekt kompiliert (ohne Signierung). Läuft auf macOS-Runnern,
+# die teuer sind - darum nur von Hand oder bei einem Tag. Der eigentliche Store-Upload
+# geht über Xcode (Product > Archive) oder Xcode Cloud, siehe docs/APP-STORE.md.
+name: iOS
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run build
+      - run: npx cap sync ios
+        working-directory: client
+      - name: Build ohne Signierung
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build | xcpretty || exit ${PIPESTATUS[0]}
+        working-directory: client/ios/App

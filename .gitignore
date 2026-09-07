@@ -5,3 +5,12 @@ data/
 .env
 .DS_Store
 .vercel
+
+# Native App: Zwischenbilder aus den SVGs (npm run icons) und Build-Ausgaben
+client/assets/*.png
+client/ios/App/App/public/
+client/android/app/build/
+client/android/.gradle/
+client/android/local.properties
+*.keystore
+*.jks

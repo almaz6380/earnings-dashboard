@@ -17,6 +17,8 @@ Jede Quelle ist optional. Was fehlt, steht im Tab „Quellen“.
 
 Technik: Node/Express lokal, auf Vercel als Serverless-Funktionen (`api/`), React + Vite + recharts
 (`client/`), Speicher lokal als JSON in `data/` oder in der Supabase-Tabelle `earnings_kv`.
+Derselbe Client läuft als native App für iPhone und Android (Capacitor, `client/ios`, `client/android`),
+siehe [docs/APP-STORE.md](docs/APP-STORE.md).
 
 ## Schnellstart lokal
 
@@ -38,6 +40,19 @@ Zufallsstrings für die Secrets: `openssl rand -hex 32`.
 4. Deploy. Danach Env-Änderungen wirken erst nach erneutem Deploy.
 5. Cron: `vercel.json` ruft `/api/collect` täglich um 06:00 UTC auf. Vercel schickt dabei `Authorization: Bearer <CRON_SECRET>`,
    also `CRON_SECRET` setzen. Alternativ cron-job.org auf `https://<app>/api/collect?secret=<CRON_SECRET>`.
+
+## Native App (App Store / Google Play)
+
+```bash
+npm run app:ios        # Client bauen, synchronisieren, Xcode öffnen
+npm run app:android    # dito mit Android Studio
+npm run app:version -- 1.0.1   # Version + Build-Nummer in beiden Projekten setzen
+```
+
+Die App fragt beim ersten Start nach der Adresse des Dashboards (`https://…`) und dem Passwort und spricht danach
+per Bearer-Token mit `/api/*`. Store-Texte liegen in `store/listing.md`, die Datenschutzerklärung wird unter
+`/datenschutz.html` mit deployt. Schritt-für-Schritt-Checkliste für Konten, Signierung, Screenshots und Einreichung:
+[docs/APP-STORE.md](docs/APP-STORE.md).
 
 ## Quellen einrichten
 
@@ -117,6 +132,8 @@ Die Meldung geht nur beim Cron-Lauf raus, nicht beim Klick auf „Aktualisieren�
   einmal neu verbinden.
 - Alle Keys nur als Umgebungsvariablen. `.env` und `data/` sind gitignored. Nie Keys in Chats oder Commits.
 - Alle Zugriffe sind lesend. Das Dashboard kann nichts auszahlen oder ändern.
+- Native App: dasselbe Token als `Authorization: Bearer`, gespeichert in den App-Preferences (kein Cloud-Backup),
+  CORS nur für die App-Origins (`server/cors.js`, weitere über `APP_ORIGINS`).
 
 ## Aufbau
 
@@ -125,6 +142,10 @@ server/   Express (lokal) + Handler, die auch als Vercel-Funktionen laufen
   sources/   eine Datei je Quelle: configured() + fetchData()
   collect.js Sammellauf, summary.js Kennzahlen, notify.js Meldung, fx.js Kurse
   auth.js Passwort/Cookie, crypto.js Token-Verschlüsselung, google/oauth.js Login
+  cors.js Freigabe für die native App
 api/      Vercel-Einstiege (nur Re-Exports)
 client/   React-Dashboard: Übersicht, Apps, Verlauf, Quellen
+  api.js Server-Adresse + Token (App), native.js Capacitor-Hooks
+  ios/ android/ native Projekte (Capacitor), assets/ Icon- und Splash-Quellen
+store/    Store-Texte und Review-Hinweise, docs/APP-STORE.md Release-Checkliste
 ```

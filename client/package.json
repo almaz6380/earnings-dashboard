@@ -2,17 +2,34 @@
   "name": "earnings-dashboard-client",
   "private": true,
   "type": "module",
+  "version": "1.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "icons": "node scripts/icons.mjs",
+    "assets": "capacitor-assets generate --ios --android --iconBackgroundColor '#151a21' --iconBackgroundColorDark '#151a21' --splashBackgroundColor '#0f1216' --splashBackgroundColorDark '#0f1216'",
+    "sync": "vite build && cap sync",
+    "ios": "cap open ios",
+    "android": "cap open android",
+    "version": "node scripts/app-version.mjs"
   },
   "dependencies": {
+    "@capacitor/app": "^8.1.1",
+    "@capacitor/browser": "^8.0.4",
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^2.15.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.1",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.1",
+    "@capacitor/ios": "^8.5.1",
     "@vitejs/plugin-react": "^4.3.4",
     "vite": "^6.0.7"
   }

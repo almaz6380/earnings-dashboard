@@ -1,8 +1,9 @@
 // Sammellauf: per Cron (Secret) oder angemeldet über den Button "Jetzt aktualisieren".
 import { cronOk, isAuthed } from '../auth.js';
+import { withCors } from '../cors.js';
 import { runCollect } from '../collect.js';
 
-export default async function handler(req, res) {
+export default withCors(async function handler(req, res) {
   res.setHeader('cache-control', 'no-store');
   const viaCron = cronOk(req);
   if (!viaCron && !isAuthed(req)) return res.status(401).json({ fehler: 'Falsches oder fehlendes Secret.' });
@@ -13,4 +14,4 @@ export default async function handler(req, res) {
   } catch (e) {
     res.status(500).json({ fehler: e.message });
   }
-}
+});

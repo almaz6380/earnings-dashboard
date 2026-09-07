@@ -226,3 +226,49 @@ test('Basis-URL: PUBLIC_URL, sonst aus dem Request', async () => {
   assert.equal(redirectUri({ headers: { host: 'egal' } }), 'https://fest.example/api/google/callback');
   delete process.env.PUBLIC_URL;
 });
+
+// ---- Native App: Bearer-Token und CORS -------------------------------------
+const { isAuthed } = await import('../auth.js');
+const { allowedOrigin, applyCors } = await import('../cors.js');
+
+test('Bearer-Token zählt wie das Cookie', () => {
+  const t = makeToken();
+  assert.ok(isAuthed({ headers: { authorization: `Bearer ${t}` } }));
+  assert.ok(isAuthed({ headers: { cookie: `${COOKIE}=${t}` } }));
+  assert.ok(!isAuthed({ headers: { authorization: 'Bearer kaputt.kaputt' } }));
+  assert.ok(!isAuthed({ headers: { authorization: `Token ${t}` } }));
+  assert.ok(!isAuthed({ headers: {} }));
+});
+
+function fakeRes() {
+  const r = { headers: {}, code: null, ended: false };
+  r.setHeader = (k, v) => { r.headers[k] = v; };
+  r.status = (c) => { r.code = c; return r; };
+  r.end = () => { r.ended = true; };
+  return r;
+}
+
+test('CORS: nur App-Origins, Preflight wird beantwortet', () => {
+  assert.ok(allowedOrigin('capacitor://localhost'));
+  assert.ok(allowedOrigin('https://localhost'));
+  assert.ok(!allowedOrigin('https://boese.example'));
+  assert.ok(!allowedOrigin(undefined));
+  process.env.APP_ORIGINS = 'https://zweite.example/';
+  assert.ok(allowedOrigin('https://zweite.example'));
+  delete process.env.APP_ORIGINS;
+
+  let res = fakeRes();
+  assert.equal(applyCors({ method: 'OPTIONS', headers: { origin: 'capacitor://localhost' } }, res), true);
+  assert.equal(res.code, 204);
+  assert.ok(res.ended);
+  assert.equal(res.headers['access-control-allow-origin'], 'capacitor://localhost');
+  assert.match(res.headers['access-control-allow-headers'], /authorization/);
+
+  res = fakeRes();
+  assert.equal(applyCors({ method: 'GET', headers: { origin: 'https://boese.example' } }, res), false);
+  assert.equal(res.headers['access-control-allow-origin'], undefined);
+
+  res = fakeRes();
+  assert.equal(applyCors({ method: 'GET', headers: {} }, res), false);
+  assert.equal(res.code, null);
+});

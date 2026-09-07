@@ -14,10 +14,13 @@ import googleStart from './handlers/googleStart.js';
 import googleCallback from './handlers/googleCallback.js';
 import googleDisconnect from './handlers/googleDisconnect.js';
 import { useSupabase } from './store.js';
+import { applyCors } from './cors.js';
 
 const PORT = +(process.env.PORT || 3001);
 const app = express();
 app.use(express.json());
+// Preflights der nativen App (OPTIONS) beantworten, bevor die GET/POST-Routen greifen.
+app.use('/api', (req, res, next) => (applyCors(req, res) ? undefined : next()));
 
 app.get('/api/state', state);
 app.get('/api/status', status);
