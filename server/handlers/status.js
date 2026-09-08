@@ -6,7 +6,7 @@ import { SOURCES } from '../sources/index.js';
 import { redirectUri, baseUrl, googleConfigured } from '../google/oauth.js';
 import { konfiguriert as rcKonfiguriert } from '../revenuecat/oauth.js';
 import { notifyConfigured } from '../notify.js';
-import { loadJSON, useSupabase } from '../store.js';
+import { loadJSON, speicherArt } from '../store.js';
 import { ukey } from '../users.js';
 import { konfiguration, istEingerichtet } from '../quellen.js';
 import { mailConfigured } from '../mail.js';
@@ -23,7 +23,7 @@ export default withCors(requireAuth(async (req, res) => {
     email: u.email,
     eingerichtet: SOURCES.filter((s) => istEingerichtet(cfg, s.meta.id)).length,
     quellenGesamt: SOURCES.length,
-    storage: useSupabase() ? 'supabase' : 'lokal (data/)',
+    storage: speicherArt(),
     notify: notifyConfigured(u.settings || {}),
     cronConfigured: !!process.env.CRON_SECRET,
     googleAvailable: googleConfigured(),

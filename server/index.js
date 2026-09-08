@@ -24,7 +24,7 @@ import revenuecatStart from './handlers/revenuecatStart.js';
 import revenuecatCallback from './handlers/revenuecatCallback.js';
 import revenuecatLink from './handlers/revenuecatLink.js';
 import revenuecatDisconnect from './handlers/revenuecatDisconnect.js';
-import { useSupabase } from './store.js';
+import { speicherArt } from './store.js';
 import { applyCors } from './cors.js';
 
 const PORT = +(process.env.PORT || 3001);
@@ -61,7 +61,7 @@ if (fs.existsSync(dist)) {
 }
 
 app.listen(PORT, () => {
-  console.log(`API-Server läuft auf http://localhost:${PORT} – Speicher: ${useSupabase() ? 'Supabase' : 'data/'}`);
+  console.log(`API-Server läuft auf http://localhost:${PORT} – Speicher: ${speicherArt()}`);
   const fehlt = ['SESSION_SECRET', 'TOKEN_ENC_KEY'].filter((k) => !process.env[k]);
   if (fehlt.length) console.warn(`Achtung, fehlt in .env: ${fehlt.join(', ')}`);
 });

@@ -1,55 +1,77 @@
 # Server online bringen
 
-Etwa 30 Minuten. Kostet nichts: Vercel und Supabase haben Gratis-Stufen, die für diese App reichen.
-Eine eigene Domain brauchst du nicht – Vercel vergibt eine kostenlose Adresse.
+Etwa 30 Minuten, kostet nichts. Eine eigene Domain brauchst du nicht – Vercel vergibt
+eine kostenlose Adresse wie `einnahmen.vercel.app`. Die kommt unten überall dort hin,
+wo `<adresse>` steht.
 
-Am Ende hast du eine Adresse wie `https://einnahmen.vercel.app`. Die kommt unten überall
-dort hin, wo `<adresse>` steht.
-
-## 1. Datenbank anlegen (5 Minuten)
-
-1. Auf [supabase.com](https://supabase.com) anmelden, neues Projekt anlegen, Region Frankfurt.
-2. Im Projekt links auf **SQL Editor** → **New query**.
-3. Den Inhalt von `supabase.sql` aus diesem Repo einfügen und ausführen.
-4. Links auf **Project Settings → API**. Dort brauchst du zwei Werte:
-   - **Project URL** → das wird `SUPABASE_URL`
-   - **service_role secret** → das wird `SUPABASE_SERVICE_KEY`
-
-Der service_role-Schlüssel darf nur auf den Server. Nie in die App, nie in einen Chat.
-
-## 2. Geheimnisse erzeugen (1 Minute)
-
-Drei Zufallsstrings, im Terminal:
-
-```bash
-openssl rand -hex 32   # für SESSION_SECRET
-openssl rand -hex 32   # für TOKEN_ENC_KEY
-openssl rand -hex 32   # für CRON_SECRET
-```
-
-`TOKEN_ENC_KEY` verschlüsselt die Zugangsdaten deiner Nutzer. Änderst du ihn später,
-müssen alle ihre Schlüssel neu eintragen. Also einmal erzeugen und sicher aufbewahren.
-
-## 3. Auf Vercel deployen (10 Minuten)
+## 1. Auf Vercel deployen (10 Minuten)
 
 1. Auf [vercel.com](https://vercel.com) mit GitHub anmelden.
 2. **Add New → Project**, dieses Repo auswählen, **Deploy**.
-3. Danach **Settings → Environment Variables**. Diese eintragen:
+
+Der erste Versuch läuft durch, die App ist aber noch nicht benutzbar – es fehlt der
+Speicher. Den holen wir uns im nächsten Schritt.
+
+## 2. Speicher dazubuchen (5 Minuten)
+
+Die App speichert nur Schlüssel und Werte. Dafür reicht ein Redis, und das gibt es
+direkt in Vercel – ohne zweites Konto, ohne zweiten Login.
+
+1. Im Vercel-Projekt auf **Storage → Create Database**.
+2. Unter den Marketplace-Anbietern **Upstash** wählen, Produkt **Redis**, kostenloser Tarif.
+3. Region: eine europäische, etwa Frankfurt.
+4. **Connect to Project** – Vercel legt die Zugangsdaten automatisch als Umgebungsvariablen
+   an (`KV_REST_API_URL` und `KV_REST_API_TOKEN`). Du musst nichts abtippen.
+
+Fertig. Die App erkennt den Speicher von selbst.
+
+<details>
+<summary>Alternative: Supabase, falls du dort noch einen freien Projektplatz hast</summary>
+
+Der Gratis-Tarif erlaubt zwei aktive Projekte, gezählt über alle Organisationen, in denen
+du Owner oder Admin bist. Pausierte Projekte zählen nicht mit.
+
+1. Projekt auf [supabase.com](https://supabase.com) anlegen, Region Frankfurt.
+2. **SQL Editor → New query**, den Inhalt von `supabase.sql` einfügen, **Run**.
+3. **Project Settings → API**: **Project URL** und den **service_role**-Schlüssel kopieren.
+4. In Vercel als `SUPABASE_URL` und `SUPABASE_SERVICE_KEY` eintragen.
+
+Der service_role-Schlüssel darf nur auf den Server. Nie in die App, nie in einen Chat.
+Ist beides gesetzt, hat Redis Vorrang.
+</details>
+
+## 3. Geheimnisse setzen (5 Minuten)
+
+Drei Zufallsstrings erzeugen, im Terminal:
+
+```bash
+openssl rand -hex 32   # SESSION_SECRET
+openssl rand -hex 32   # TOKEN_ENC_KEY
+openssl rand -hex 32   # CRON_SECRET
+```
+
+In Vercel unter **Settings → Environment Variables** eintragen:
 
 | Name | Wert |
 |---|---|
 | `SESSION_SECRET` | erster Zufallsstring |
 | `TOKEN_ENC_KEY` | zweiter Zufallsstring |
 | `CRON_SECRET` | dritter Zufallsstring |
-| `SUPABASE_URL` | aus Schritt 1 |
-| `SUPABASE_SERVICE_KEY` | aus Schritt 1 |
 | `PUBLIC_URL` | deine Vercel-Adresse, ohne Schrägstrich am Ende |
 
-4. **Deployments → Redeploy.** Umgebungsvariablen greifen erst nach einem neuen Deploy.
+`TOKEN_ENC_KEY` verschlüsselt die Zugangsdaten deiner Nutzer. Änderst du ihn später,
+müssen alle ihre Schlüssel neu eintragen. Also einmal erzeugen und sicher aufbewahren.
 
-Prüfen: `https://<adresse>` öffnen. Es muss die Anmeldemaske kommen. Lege dir dort ein Konto an.
+Danach **Deployments → Redeploy.** Umgebungsvariablen greifen erst nach einem neuen Deploy.
 
-## 4. Google-Login einrichten (15 Minuten + Wartezeit)
+## 4. Prüfen
+
+`https://<adresse>` öffnen. Es muss die Anmeldemaske kommen. Leg dir dort ein Konto an
+und schau unter **Konto** nach: bei „Speicher" muss `redis` stehen (oder `supabase`).
+Steht dort `lokal (data/)`, hat der Server die Zugangsdaten nicht gesehen – dann fehlt
+ein Redeploy oder eine Variable.
+
+## 5. Google-Login einrichten (15 Minuten + Wartezeit)
 
 Nur nötig für AdMob, AdSense und Google Play. RevenueCat, App Store, Wise und PayPal
 laufen ohne.
@@ -69,7 +91,7 @@ Google fragt nach einem Demo-Video und einer Begründung je Berechtigung. **Das 
 2 bis 6 Wochen** – deshalb früh beantragen. Die App funktioniert währenddessen ganz normal,
 nur eben für einen kleinen Kreis.
 
-## 5. Deine bisherigen Daten übernehmen (2 Minuten)
+## 6. Deine bisherigen Daten übernehmen (2 Minuten)
 
 Lokal, mit den Vercel-Werten in einer `.env`:
 
@@ -80,7 +102,7 @@ node server/cli.js migrate deine@mail.de <passwort>
 Das legt ein Konto an und schiebt deine alten Zugangsdaten und deinen Verlauf hinein.
 Danach kannst du die Quellen-Variablen aus der Umgebung löschen.
 
-## 6. Optional
+## 7. Optional
 
 | Was | Wozu | Wie |
 |---|---|---|
@@ -95,7 +117,8 @@ ntfy braucht nichts vom Betreiber – Nutzer tragen ihr Topic selbst im Konto ei
 
 - `https://<adresse>` zeigt die Anmeldung ✓
 - Konto anlegen klappt ✓
-- Unter „Einrichten" eine Quelle verbinden, „Verbinden" sagt „Verbindung steht" ✓
+- Unter „Konto" steht bei Speicher `redis` oder `supabase` ✓
+- Unter „Einrichten" eine Quelle verbinden, es kommt „Verbindung steht" ✓
 - `https://<adresse>/datenschutz.html` ist erreichbar ✓
 - Am nächsten Morgen stehen neue Zahlen da (der Cron läuft um 06:00 UTC) ✓
 

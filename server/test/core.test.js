@@ -374,3 +374,63 @@ test('RevenueCat-State: signiert, mit Nonce für den PKCE-Verifier', () => {
   assert.equal(teileState('ohne-tilde').state, null);
   assert.equal(teileState(`n123~${s}x`).state, null);
 });
+
+// ---- Speicher: Redis ---------------------------------------------------------
+const speicher = await import('../store.js');
+
+test('Redis-Speicher: schreiben, lesen, nach Präfix auflisten, löschen', async () => {
+  const alt = { url: process.env.KV_REST_API_URL, tok: process.env.KV_REST_API_TOKEN, f: globalThis.fetch };
+  process.env.KV_REST_API_URL = 'https://redis.example';
+  process.env.KV_REST_API_TOKEN = 'geheim';
+
+  // Ein winziges Redis im Speicher, damit der Test ohne Netz läuft.
+  const daten = new Map();
+  const befehle = [];
+  globalThis.fetch = async (url, init) => {
+    const [cmd, ...args] = JSON.parse(init.body);
+    befehle.push(cmd);
+    if (init.headers.authorization !== 'Bearer geheim') return new Response('nein', { status: 401 });
+    let result = null;
+    if (cmd === 'GET') result = daten.has(args[0]) ? daten.get(args[0]) : null;
+    else if (cmd === 'SET') { daten.set(args[0], args[1]); result = 'OK'; }
+    else if (cmd === 'DEL') { daten.delete(args[0]); result = 1; }
+    else if (cmd === 'SCAN') {
+      // In zwei Häppchen antworten, damit die Schleife über den Cursor mitgeprüft wird.
+      const muster = args[2].replace(/\*$/, '');
+      const treffer = [...daten.keys()].filter((k) => k.startsWith(muster));
+      const cursor = args[0];
+      result = cursor === '0' ? ['7', treffer.slice(0, 1)] : ['0', treffer.slice(1)];
+    }
+    return new Response(JSON.stringify({ result }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  try {
+    assert.equal(speicher.useRedis(), true);
+    assert.equal(speicher.speicherArt(), 'redis');
+
+    await speicher.saveJSON('user:a1', { email: 'a@example.com' });
+    await speicher.saveJSON('user:a2', { email: 'b@example.com' });
+    await speicher.saveJSON('u:a1:history', { daily: {} });
+
+    assert.deepEqual(await speicher.loadJSON('user:a1'), { email: 'a@example.com' });
+    assert.equal(await speicher.loadJSON('gibtsnicht'), null);
+    assert.deepEqual(await speicher.loadJSON('gibtsnicht', { leer: true }), { leer: true });
+
+    // Nach Präfix: "u:a1:history" darf hier nicht auftauchen, obwohl es mit "u" beginnt.
+    const konten = await speicher.listKeys('user:');
+    assert.deepEqual(konten.sort(), ['user:a1', 'user:a2']);
+    assert.ok(befehle.includes('SCAN'), 'listet über SCAN, nicht über KEYS');
+
+    await speicher.deleteJSON('user:a2');
+    assert.deepEqual((await speicher.listKeys('user:')).sort(), ['user:a1']);
+
+    // Ein Fehler des Dienstes darf nicht stillschweigend zu "keine Daten" werden.
+    process.env.KV_REST_API_TOKEN = 'falsch';
+    await assert.rejects(() => speicher.loadJSON('user:a1'), /401/);
+  } finally {
+    globalThis.fetch = alt.f;
+    if (alt.url === undefined) delete process.env.KV_REST_API_URL; else process.env.KV_REST_API_URL = alt.url;
+    if (alt.tok === undefined) delete process.env.KV_REST_API_TOKEN; else process.env.KV_REST_API_TOKEN = alt.tok;
+  }
+  assert.equal(speicher.useRedis(), false, 'nach dem Test wieder der lokale Speicher');
+});

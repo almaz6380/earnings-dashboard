@@ -25,7 +25,8 @@ Jede Quelle ist optional und wird im Tab „Einrichten" verbunden. Zwei Wege fü
 Die Zugangsdaten liegen AES-verschlüsselt auf dem Server, werden nie angezeigt und nur lesend genutzt.
 
 Technik: Node/Express lokal, auf Vercel als Serverless-Funktionen (`api/`), React + Vite + recharts
-(`client/`), Speicher lokal als JSON in `data/` oder in der Supabase-Tabelle `earnings_kv`.
+(`client/`). Speicher wahlweise Redis (in Vercel mit zwei Klicks dazubuchbar), eine
+Supabase-Tabelle oder lokale JSON-Dateien - je nachdem, was in der Umgebung gesetzt ist.
 Derselbe Client läuft als native App für iPhone und Android (Capacitor, `client/ios`, `client/android`).
 Alles zum Betrieb als öffentlicher Dienst und zur Store-Einreichung: [docs/APP-STORE.md](docs/APP-STORE.md).
 
