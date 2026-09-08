@@ -1,123 +1,131 @@
 import React, { useMemo, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
-import { fmtMoney, SOURCE_COLORS } from '../format.js';
+import { fmtMoney, SOURCE_ORDER } from '../format.js';
+import { StapelBalken, Legende, farbe } from '../charts.jsx';
+import { Punkt, Leer } from '../components.jsx';
 import AppIcon from '../AppIcon.jsx';
 
-const RANGES = [
-  { id: 'd7', label: '7 Tage' },
-  { id: 'd30', label: '30 Tage' },
-  { id: 'month', label: 'Monat' },
-];
-
-// Quellen, die überhaupt eine App-Aufschlüsselung liefern können (AdSense sind Webseiten).
+const ZEITRAEUME = [{ id: 'd7', t: '7 Tage' }, { id: 'd30', t: '30 Tage' }, { id: 'month', t: 'Monat' }];
+// Quellen, die überhaupt je App aufschlüsseln können (AdSense sind Webseiten, keine Apps).
 const APP_QUELLEN = ['admob', 'revenuecat', 'appstore', 'play'];
-
-// Bei kleinen Beträgen zwei Nachkommastellen, sonst stehen an der Achse
-// mehrere Striche mit demselben Text ("1 €, 1 €").
-const stellen = (max) => (max < 10 ? 2 : 0);
-// Nur wirklich lange Namen kürzen; kürzere darf recharts über zwei Zeilen umbrechen.
-const kurz = (name) => (name.length > 28 ? `${name.slice(0, 27)}…` : name);
-
-function TT({ active, payload, cur, range, rangeLabel }) {
-  if (!active || !payload?.length) return null;
-  const a = payload[0].payload;
-  return (
-    <div className="tooltip">
-      <div className="tt-title">{a.name}</div>
-      {a.sources.map((q) => (
-        <div className="tt-row" key={q.id}><span className="dot" style={{ background: SOURCE_COLORS[q.id] || 'var(--muted)' }} />{q.label}<span className="tt-val">{fmtMoney(q[range], cur)}</span></div>
-      ))}
-      <div className="tt-row total">{rangeLabel}<span className="tt-val">{fmtMoney(a[range], cur)}</span></div>
-    </div>
-  );
-}
 
 export default function Apps({ s }) {
   const cur = s.baseCurrency;
   const apps = s.apps || [];
-  const [range, setRange] = useState('d30');
-  const rangeLabel = RANGES.find((r) => r.id === range).label;
-  // Nur Apps mit einem Betrag im gewählten Zeitraum – Nullbalken sind unsichtbar
-  // und würden das Diagramm nur in die Länge ziehen. In der Tabelle bleiben sie.
-  const top = useMemo(() => apps.filter((a) => a[range] > 0).sort((a, b) => b[range] - a[range]).slice(0, 10), [apps, range]);
-  const maxWert = top.length ? top[0][range] : 0;
-  // Eine verbundene Quelle, die keine einzige App beisteuert, sieht sonst aus wie ein Fehler.
+  const [zeitraum, setZeitraum] = useState('d30');
+  const [tabelle, setTabelle] = useState(false);
+  const labelZeitraum = ZEITRAEUME.find((z) => z.id === zeitraum).t;
+
+  const top = useMemo(
+    () => apps.filter((a) => a[zeitraum] > 0).sort((a, b) => b[zeitraum] - a[zeitraum]).slice(0, 10),
+    [apps, zeitraum],
+  );
+  // Eine Zeile je App, ein Feld je Quelle - so zeigt der Balken auch die Zusammensetzung.
+  const zeilen = useMemo(() => top.map((a) => {
+    const z = { name: a.name, __summe: a[zeitraum] };
+    for (const q of a.sources) z[q.id] = q[zeitraum] || 0;
+    return z;
+  }), [top, zeitraum]);
+  const ids = SOURCE_ORDER.filter((id) => zeilen.some((z) => z[id] > 0));
+  const labels = Object.fromEntries(Object.values(s.bySource).map((x) => [x.id, x.label]));
+
+  // Zwei verschiedene Gründe, warum eine verbundene Quelle hier fehlt - sie
+  // in einen Satz zu werfen, behauptete etwas Falsches über die zweite Gruppe.
   const genannt = new Set(apps.flatMap((a) => a.sources.map((q) => q.id)));
-  const stumm = APP_QUELLEN.filter((id) => s.bySource[id]?.status === 'ok' && !genannt.has(id)).map((id) => s.bySource[id].label);
+  const offen = APP_QUELLEN.filter((id) => s.bySource[id]?.status === 'ok' && !genannt.has(id));
+  const stumm = offen.filter((id) => s.bySource[id].countsInTotal).map((id) => s.bySource[id].label);
+  const nichtGezaehlt = offen.filter((id) => !s.bySource[id].countsInTotal).map((id) => s.bySource[id].label);
 
   if (!apps.length) {
     return (
-      <div className="panel">
-        <h2>Nach Apps</h2>
-        <p className="hint">Noch keine App-Werte. Die Aufschlüsselung kommt von AdMob (je App), RevenueCat (je Projekt) sowie – sobald verbunden – App Store Connect und Google Play. Nach dem nächsten „Aktualisieren" steht sie hier.</p>
-      </div>
+      <Leer
+        titel="Noch keine App-Werte"
+        text="Die Aufschlüsselung kommt von AdMob (je App), RevenueCat (je Projekt), App Store Connect und Google Play. Nach dem nächsten Abruf steht sie hier."
+      />
     );
   }
 
   return (
     <>
-      <div className="toolbar">
-        {RANGES.map((r) => (
-          <button key={r.id} className={`btn small ${range === r.id ? 'active' : ''}`} onClick={() => setRange(r.id)}>{r.label}</button>
-        ))}
+      <div className="filter">
+        <div className="segment">
+          {ZEITRAEUME.map((z) => (
+            <button key={z.id} className={zeitraum === z.id ? 'active' : ''} onClick={() => setZeitraum(z.id)}>{z.t}</button>
+          ))}
+        </div>
+        <span className="luecke" />
+        <div className="segment">
+          <button className={!tabelle ? 'active' : ''} onClick={() => setTabelle(false)}>Diagramm</button>
+          <button className={tabelle ? 'active' : ''} onClick={() => setTabelle(true)}>Tabelle</button>
+        </div>
       </div>
 
-      <div className="panel">
-        <h2>Größte Apps · {rangeLabel}</h2>
-        {top.length ? (
-          <ResponsiveContainer width="100%" height={Math.max(160, top.length * 34 + 30)}>
-            <BarChart data={top} layout="vertical" margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-              <CartesianGrid horizontal={false} stroke="var(--border)" />
-              <XAxis type="number" stroke="var(--muted)" tick={{ fontSize: 11 }} tickFormatter={(v) => fmtMoney(v, cur, stellen(maxWert))} />
-              <YAxis type="category" dataKey="name" stroke="var(--muted)" tick={{ fontSize: 11 }} width={140} tickFormatter={kurz} />
-              <Tooltip content={<TT cur={cur} range={range} rangeLabel={rangeLabel} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-              <Bar dataKey={range} radius={[0, 3, 3, 0]}>
-                {top.map((a) => <Cell key={a.key} fill={SOURCE_COLORS[a.sources[0]?.id] || '#3987e5'} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        ) : <p className="hint">In diesem Zeitraum hat noch keine App etwas eingebracht.</p>}
-      </div>
+      {!tabelle && (
+        <div className="karte">
+          <h2>Größte Apps · {labelZeitraum}</h2>
+          {zeilen.length ? (
+            <>
+              <Legende ids={ids} labels={labels} />
+              <div className="chart">
+                <StapelBalken daten={zeilen} ids={ids} labels={labels} cur={cur} hoehe={Math.max(150, zeilen.length * 38 + 34)} />
+              </div>
+            </>
+          ) : <p className="hinweis">In diesem Zeitraum hat noch keine App etwas eingebracht.</p>}
+        </div>
+      )}
 
-      <div className="panel">
+      <div className="karte">
         <h2>Alle Apps</h2>
-        <div className="scroll">
+        <div className="rollen">
           <table>
             <thead>
-              <tr><th>App</th><th className="nowrap">gestern</th><th className="nowrap">7 Tage</th><th className="nowrap">30 Tage</th><th className="nowrap">Monat</th></tr>
+              <tr>
+                <th>App</th>
+                <th className="zahl nowrap nur-breit">gestern</th>
+                <th className="zahl nowrap nur-breit">7 Tage</th>
+                <th className="zahl nowrap">30 Tage</th>
+                <th className="zahl nowrap nur-breit">Monat</th>
+              </tr>
             </thead>
             <tbody>
               {apps.map((a) => (
                 <tr key={a.key}>
                   <td>
                     <div className="appzeile">
-                      <AppIcon src={a.icon} name={a.name} color={SOURCE_COLORS[a.sources[0]?.id]} size={32} />
-                      <div>
+                      <AppIcon src={a.icon} name={a.name} color={farbe(a.sources[0]?.id)} size={32} />
+                      <div style={{ minWidth: 0 }}>
                         <div>{a.name}</div>
-                        <div className="hint small nowrap">
+                        <div className="hinweis klein nowrap" style={{ display: 'flex', gap: 9, marginTop: 1 }}>
                           {a.sources.map((q) => (
-                          <span key={q.id} title={`${q.label}: ${fmtMoney(q[range], cur)} · ${rangeLabel}`}>
-                            <span className="dot" style={{ background: SOURCE_COLORS[q.id] || 'var(--muted)' }} />{q.label}{' '}
-                          </span>
-                        ))}
+                            <span key={q.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                              title={`${q.label}: ${fmtMoney(q[zeitraum], cur)} · ${labelZeitraum}`}>
+                              <Punkt farbe={farbe(q.id)} />{q.label}
+                            </span>
+                          ))}
                         </div>
                       </div>
                     </div>
                   </td>
-                  <td>{fmtMoney(a.yesterday, cur)}</td>
-                  <td>{fmtMoney(a.d7, cur)}</td>
-                  <td><b>{fmtMoney(a.d30, cur)}</b></td>
-                  <td>{fmtMoney(a.month, cur)}</td>
+                  <td className="zahl nur-breit">{fmtMoney(a.yesterday, cur)}</td>
+                  <td className="zahl nur-breit">{fmtMoney(a.d7, cur)}</td>
+                  <td className="zahl"><b>{fmtMoney(a.d30, cur)}</b></td>
+                  <td className="zahl nur-breit">{fmtMoney(a.month, cur)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
       {stumm.length > 0 && (
-        <p className="hint small">Verbunden, aber ohne App-Werte: {stumm.join(', ')}. Diese Quelle meldet zurzeit keine Einnahmen – bei RevenueCat heißt das: keine laufenden Abos.</p>
+        <p className="hinweis klein">Verbunden, meldet aber zurzeit keine Einnahmen: {stumm.join(', ')}. Bei RevenueCat heißt das: keine laufenden Abos.</p>
       )}
-      <p className="hint small">Gezählt werden nur die Quellen, die auch in die Gesamtsumme gehen – so wird nichts doppelt gezählt. Gleiche App-Namen aus verschiedenen Quellen (z. B. Werbung und Abos) stehen in einer Zeile. AdSense bleibt außen vor: das sind Webseiten, keine Apps. AdMob meldet mit 1–2 Tagen Verzug, deshalb steht bei „gestern" meist noch 0 €.</p>
+      {nichtGezaehlt.length > 0 && (
+        <p className="hinweis klein">{nichtGezaehlt.join(' und ')} {nichtGezaehlt.length > 1 ? 'stehen' : 'steht'} hier nicht, weil RevenueCat den Abo-Umsatz schon meldet – sonst zählte er doppelt.</p>
+      )}
+      <p className="hinweis klein">
+        Gezählt wird nur, was auch in die Gesamtsumme geht, damit nichts doppelt erscheint. Gleiche App-Namen aus verschiedenen Quellen stehen in einer Zeile.
+        AdMob meldet mit 1–2 Tagen Verzug, deshalb steht bei „gestern“ oft noch nichts.
+      </p>
     </>
   );
 }
