@@ -29,10 +29,13 @@ Zugangsdaten in der App ein, und dein Server ruft für jedes Konto die Berichte 
 - [ ] **Google Play Console**: einmalig 25 USD. Neue Privatkonten müssen vor dem ersten Produktions-Release einen
       **geschlossenen Test mit 12 Testern über 14 Tage** durchlaufen.
 - [ ] Ein Mac mit Xcode 16+ für den iOS-Build.
-- [ ] Eine **Domain** für den Dienst (z. B. `einnahmen.example`) – Prüfer und Nutzer brauchen eine feste Adresse.
+- [ ] Eine feste Adresse für den Dienst. **Eine eigene Domain ist nicht nötig** – Vercel vergibt kostenlos eine
+      wie `einnahmen.vercel.app`, und die genügt für Google, für die Stores und für die Rechtstexte. Wo unten
+      `<domain>` steht, ist einfach diese Adresse gemeint. Eine eigene Domain ist reine Kosmetik und lässt sich
+      später nachrüsten (dann Weiterleitungs-URIs und `PUBLIC_URL` mitziehen).
 
 ### 1. Server aufsetzen (der eigentliche Dienst)
-- [ ] Vercel-Projekt aus dem Repo, `supabase.sql` in Supabase ausführen, Domain verbinden.
+- [ ] Vercel-Projekt aus dem Repo, `supabase.sql` in Supabase ausführen. Schritt für Schritt: [START.md](START.md).
 - [ ] Env setzen: `SESSION_SECRET`, `TOKEN_ENC_KEY`, `CRON_SECRET`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `PUBLIC_URL`.
 - [ ] **Google OAuth-Client** (`GOOGLE_CLIENT_ID/SECRET`), Weiterleitungs-URI `https://<domain>/api/google/callback`.
       Für fremde Nutzer muss der Zustimmungsbildschirm auf **„In production"** stehen. Die Scopes `admob.readonly`,

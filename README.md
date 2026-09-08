@@ -45,6 +45,8 @@ Zufallsstrings für die Secrets: `openssl rand -hex 32`.
 
 ## Deploy auf Vercel
 
+Schritt für Schritt mit allen Klickpfaden: **[docs/START.md](docs/START.md)**. Kurzfassung:
+
 1. Neues Vercel-Projekt aus diesem Repo, Root = Projektordner. `vercel.json` bringt Region, Build und Cron mit.
 2. Supabase: `supabase.sql` einmal im SQL-Editor ausführen (die Tabelle darf neben anderen Tabellen liegen).
 3. Env-Variablen in Vercel eintragen (alle aus `.env.example`, die du nutzt). `PUBLIC_URL` ist optional, die App leitet sie sonst aus der Anfrage ab.
