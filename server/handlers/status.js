@@ -1,32 +1,34 @@
-// Konfigurationsstand des Kontos: welche Quellen eingerichtet sind, Google-Verbindung, letzter Lauf.
+// Zustand des Kontos: Speicher, Benachrichtigung, letzter Lauf. Alles über die
+// Quellen selbst (Einträge, Felder, Verbindungen) liefert /api/config.
 import { requireAuth } from '../auth.js';
 import { withCors } from '../cors.js';
 import { SOURCES } from '../sources/index.js';
-import { googleStatus, redirectUri, baseUrl, googleConfigured } from '../google/oauth.js';
+import { redirectUri, baseUrl, googleConfigured } from '../google/oauth.js';
+import { konfiguriert as rcKonfiguriert } from '../revenuecat/oauth.js';
 import { notifyConfigured } from '../notify.js';
 import { loadJSON, useSupabase } from '../store.js';
-import { getConfig, ukey } from '../users.js';
+import { ukey } from '../users.js';
+import { konfiguration, istEingerichtet } from '../quellen.js';
 import { mailConfigured } from '../mail.js';
 import { baseOf } from '../collect.js';
 
 export default withCors(requireAuth(async (req, res) => {
   res.setHeader('cache-control', 'no-store');
   const u = req.user;
-  const cfg = getConfig(u);
-  const [google, latest] = await Promise.all([googleStatus(u.id), loadJSON(ukey(u.id, 'latest'))]);
-  const sources = SOURCES.map((s) => ({
-    ...s.meta,
-    configured: s.configured(cfg),
-    missing: s.meta.needs.filter((k) => !cfg[k]),
-  }));
+  const cfg = konfiguration(u);
+  const latest = await loadJSON(ukey(u.id, 'latest'));
   res.status(200).json({
-    sources, google: { ...google, redirectUri: redirectUri(req) }, latest,
+    latest,
     webUrl: baseUrl(req),
     email: u.email,
+    eingerichtet: SOURCES.filter((s) => istEingerichtet(cfg, s.meta.id)).length,
+    quellenGesamt: SOURCES.length,
     storage: useSupabase() ? 'supabase' : 'lokal (data/)',
     notify: notifyConfigured(u.settings || {}),
     cronConfigured: !!process.env.CRON_SECRET,
     googleAvailable: googleConfigured(),
+    revenuecatLogin: rcKonfiguriert(),
+    googleRedirectUri: redirectUri(req),
     mailConfigured: mailConfigured(),
     baseCurrency: baseOf(u),
   });

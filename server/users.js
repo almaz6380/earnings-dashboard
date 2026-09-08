@@ -100,35 +100,19 @@ export async function deleteUser(u) {
   await deleteJSON(userKey(u.id));
 }
 
-// Konfiguration der Quellen: flache Schlüssel wie früher in .env (REVENUECAT_API_KEY, …),
-// als Ganzes AES-verschlüsselt im Konto.
+// Konfiguration der Quellen als Ganzes AES-verschlüsselt im Konto. Welche Form der
+// Inhalt hat und wie ältere Formen übersetzt werden, steht in quellen.js - hier geht
+// es nur um Ver- und Entschlüsseln.
 export function getConfig(u) {
   if (!u?.config) return {};
   try { return JSON.parse(decrypt(u.config)); } catch { return {}; }
 }
 
-export async function setConfig(u, patch) {
-  const cfg = getConfig(u);
-  for (const [k, v] of Object.entries(patch || {})) {
-    if (!/^[A-Z][A-Z0-9_]{1,60}$/.test(k)) continue;
-    const s = v == null ? '' : String(v).trim();
-    if (!s) delete cfg[k];
-    else cfg[k] = s.slice(0, 20000);
-  }
-  u.config = Object.keys(cfg).length ? encrypt(JSON.stringify(cfg)) : null;
+export async function setConfig(u, cfg) {
+  const leer = !cfg || (cfg.quellen && !Object.keys(cfg.quellen).length);
+  u.config = leer ? null : encrypt(JSON.stringify(cfg));
   await saveUser(u);
   return cfg;
-}
-
-// Anzeige: nie den Wert, nur "gesetzt" plus die letzten Zeichen zur Wiedererkennung.
-export function maskConfig(cfg, fields) {
-  const out = {};
-  for (const [k, v] of Object.entries(cfg || {})) {
-    const f = fields.get(k);
-    if (f && !f.secret) { out[k] = { set: true, value: v }; continue; }
-    out[k] = { set: true, hint: v.length > 8 ? `…${v.slice(-4)}` : '••••' };
-  }
-  return out;
 }
 
 export function publicUser(u) {

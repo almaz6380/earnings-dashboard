@@ -1,11 +1,9 @@
 import { requireAuth } from '../auth.js';
 import { withCors } from '../cors.js';
-import { disconnect } from '../google/oauth.js';
-import { body } from './_body.js';
+import { trennen } from '../revenuecat/oauth.js';
 
 export default withCors(requireAuth(async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ fehler: 'Nur POST.' });
-  // Ohne Angabe alle Verbindungen - so verhielt sich der Aufruf früher.
-  await disconnect(req.user.id, body(req).id || null);
+  await trennen(req.user.id);
   res.status(200).json({ ok: true });
 }));

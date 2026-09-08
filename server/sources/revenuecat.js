@@ -1,46 +1,46 @@
 // RevenueCat API v2: Übersichts-Kennzahlen (MRR, Umsatz 28 Tage, aktive Abos).
-// Mehrere Projekte möglich: RevenueCat-Secret-Keys gelten je Projekt, darum je Projekt
-// ein Paar aus Schlüssel und Projekt-ID (REVENUECAT_API_KEY / _2 / _3 …) in der Konto-Konfiguration.
+// Ein Eintrag ist ein Projekt. Der Zugang kommt entweder aus dem RevenueCat-Login
+// (OAuth, gilt für alle Projekte des Kontos) oder aus einem Secret Key v2, der
+// immer nur für genau ein Projekt gilt.
 import { getJSON, ymd, daysAgo } from '../http.js';
 
-const MAX_PROJEKTE = 5;
-
-function projektFelder(i) {
-  const s = i === 1 ? '' : `_${i}`, n = i === 1 ? '' : ` (${i}. Projekt)`;
-  return [
-    { key: `REVENUECAT_API_KEY${s}`, label: `Secret API Key v2${n}`, secret: true, optional: i > 1, hint: i === 1 ? 'Project settings → API keys → New secret API key, Berechtigung „Charts & Metrics: Read"' : undefined },
-    { key: `REVENUECAT_PROJECT_ID${s}`, label: `Projekt-ID${n}`, optional: i > 1, hint: i === 1 ? 'steht in der URL: app.revenuecat.com/projects/<ID>/…' : undefined },
-    { key: `REVENUECAT_LABEL${s}`, label: `Anzeigename${n}`, optional: true },
-  ];
-}
-
 export const meta = { id: 'revenuecat', label: 'RevenueCat', art: 'Abo-Umsatz (Schätzung)', kind: 'earned',
-  needs: ['REVENUECAT_API_KEY', 'REVENUECAT_PROJECT_ID'],
-  help: 'Ein Secret-Key gilt für genau ein Projekt. Für weitere Apps ein zweites und drittes Paar eintragen.',
-  fields: [1, 2, 3].flatMap(projektFelder) };
+  needs: ['REVENUECAT_PROJECT_ID'], mehrfach: true, entdeckbar: true, loginMoeglich: true,
+  entdeckenAb: ['REVENUECAT_API_KEY'],
+  konsole: { url: 'https://app.revenuecat.com', text: 'RevenueCat öffnen' },
+  help: 'Am einfachsten mit RevenueCat anmelden. Ohne Login je Projekt einen Secret Key v2 mit der Berechtigung „Charts & Metrics: Read" eintragen.',
+  felder: [
+    { key: 'REVENUECAT_API_KEY', label: 'Secret API Key v2', secret: true, optional: true, hint: 'nur nötig ohne RevenueCat-Login' },
+    { key: 'REVENUECAT_PROJECT_ID', label: 'Projekt-ID', hint: 'steht in der Adresszeile: app.revenuecat.com/projects/<ID>' },
+  ] };
 
-// Liest die nummerierten Paare aus der Konto-Konfiguration. Nummer 1 ohne Suffix.
-export function projects(cfg = {}) {
-  const out = [];
-  for (let i = 1; i <= MAX_PROJEKTE; i++) {
-    const s = i === 1 ? '' : `_${i}`;
-    const key = cfg[`REVENUECAT_API_KEY${s}`];
-    const id = cfg[`REVENUECAT_PROJECT_ID${s}`];
-    if (key && id) out.push({ key, id, label: cfg[`REVENUECAT_LABEL${s}`] || `Projekt ${i}` });
+// Ohne Projekt-ID geht nichts; der Zugang kommt vom Login oder vom Schlüssel.
+export const vollstaendig = (e) => !!(e?.REVENUECAT_PROJECT_ID && (e.REVENUECAT_API_KEY || e.oauth));
+
+async function kopf(eintrag, revenuecat) {
+  if (eintrag.oauth) {
+    if (!revenuecat) throw new Error('RevenueCat-Login ist auf diesem Server nicht eingerichtet.');
+    return { authorization: `Bearer ${await revenuecat.token()}` };
   }
-  return out;
+  return { authorization: `Bearer ${eintrag.REVENUECAT_API_KEY}` };
 }
 
-export function configured(cfg = {}) {
-  return projects(cfg).length > 0;
+// Welche Projekte dieser Zugang sieht - erspart das Kopieren der ID aus der Adresszeile.
+export async function entdecke({ eintrag = {}, revenuecat, fetchJSON = getJSON } = {}) {
+  if (!eintrag.oauth && !eintrag.REVENUECAT_API_KEY) throw new Error('Erst anmelden oder einen Secret Key eintragen.');
+  const r = await fetchJSON('https://api.revenuecat.com/v2/projects', { headers: await kopf(eintrag, revenuecat) });
+  return (r.items || []).map((p) => ({
+    werte: { REVENUECAT_PROJECT_ID: p.id },
+    label: p.name || p.id,
+    hinweis: p.name ? p.id : null,
+  }));
 }
 
 const apiBase = (id) => `https://api.revenuecat.com/v2/projects/${id}`;
 
 // Ein Projekt abrufen. Fehler wirft, der Aufrufer fängt ihn ab.
-export async function fetchProject(p, { days = 60, fetchJSON = getJSON, base = 'EUR' } = {}) {
+export async function fetchProject(p, { days = 60, fetchJSON = getJSON, base = 'EUR', headers } = {}) {
   const cur = base;
-  const headers = { authorization: `Bearer ${p.key}` };
   const ov = await fetchJSON(`${apiBase(p.id)}/metrics/overview?currency=${cur}`, { headers });
   const metrics = {};
   for (const m of ov.metrics || ov.overview_metrics || []) metrics[m.id] = m.value;
@@ -65,22 +65,12 @@ export async function fetchProject(p, { days = 60, fetchJSON = getJSON, base = '
   };
 }
 
-export async function fetchData({ cfg = {}, base = 'EUR', days = 60, fetchJSON = getJSON } = {}) {
-  const liste = projects(cfg);
-  if (!liste.length) throw new Error('Kein RevenueCat-Projekt eingerichtet.');
-  const ergebnisse = [], fehler = [], hinweise = [];
-  // Seriell, damit das Rate-Limit (25 Anfragen/Minute) nicht anschlägt.
-  for (const p of liste) {
-    try {
-      const r = await fetchProject(p, { days, fetchJSON, base });
-      ergebnisse.push(r);
-      if (r.note) hinweise.push(r.note);
-    } catch (e) {
-      fehler.push(`${p.label}: ${e.message.slice(0, 150)}`);
-    }
-  }
-  if (!ergebnisse.length) throw new Error(fehler.join(' | ') || 'RevenueCat lieferte keine Daten.');
-  return mergeProjects(ergebnisse, fehler, hinweise);
+// Ein Eintrag ist ein Projekt. Mehrere Einträge führt der Sammellauf zusammen.
+export async function fetchData({ eintrag = {}, revenuecat, base = 'EUR', days = 60, fetchJSON = getJSON } = {}) {
+  const headers = await kopf(eintrag, revenuecat);
+  const p = { id: eintrag.REVENUECAT_PROJECT_ID, label: eintrag.label || eintrag.REVENUECAT_PROJECT_ID };
+  const r = await fetchProject(p, { days, fetchJSON, base, headers });
+  return mergeProjects([r], [], r.note ? [r.note] : []);
 }
 
 // Ergebnisse mehrerer Projekte zusammenführen.

@@ -10,7 +10,10 @@ Zugangsdaten in der App ein, und dein Server ruft für jedes Konto die Berichte 
 |---|---|---|
 | Konten: Registrierung, Login, Passwort ändern/vergessen, Konto löschen | `server/users.js`, `server/auth.js`, `server/handlers/*` | fertig, getestet |
 | Zugangsdaten je Konto, AES-verschlüsselt, nie zurückgegeben | `server/users.js` (`setConfig`, `maskConfig`), `server/handlers/config.js` | fertig |
-| Quellen lesen aus der Konto-Konfiguration, Google-Login je Konto | `server/sources/*`, `server/google/oauth.js` | fertig |
+| Quellen lesen aus der Konto-Konfiguration, mehrere Einträge je Quelle | `server/sources/*`, `server/quellen.js` | fertig |
+| Mehrere Google-Konten je Nutzer, Zuordnung je Eintrag | `server/google/oauth.js` | fertig |
+| RevenueCat-Login (OAuth mit PKCE) statt Schlüssel | `server/revenuecat/oauth.js` | fertig, braucht einen registrierten Client |
+| Kontosuche statt Abtippen, .p8-Dateiauswahl, Probeabruf | `server/handlers/discover.js`, `test.js`, `client/src/views/Einrichten.jsx` | fertig |
 | Sammellauf je Konto und per Cron über alle Konten mit Zeitbudget | `server/collect.js` | fertig |
 | Tägliche Meldung je Konto (ntfy-Topic, Telegram-Chat-ID) | `server/notify.js` | fertig |
 | Native App: Login/Registrieren, Einrichten-Formulare, Konto-Tab, Deep Link `einnahmen://` | `client/src/*` | fertig |
@@ -36,6 +39,11 @@ Zugangsdaten in der App ein, und dein Server ruft für jedes Konto die Berichte 
       `adsense.readonly` und `devstorage.read_only` sind *sensitive*: Google verlangt eine **Verifizierung**
       (Datenschutz-URL, Homepage, Demo-Video der OAuth-Nutzung, Begründung je Scope). Dauer 2–6 Wochen. Bis dahin
       können max. 100 Testnutzer verbinden, die du im Zustimmungsbildschirm einträgst.
+- [ ] **RevenueCat-Login** (optional, spart Nutzern den Schlüssel je Projekt): Client bei `support@revenuecat.com`
+      registrieren lassen – Redirect-URI `https://<domain>/api/revenuecat/callback`, Scopes
+      `charts_metrics:overview:read` und `charts_metrics:charts:read`, Typ „confidential". Danach
+      `REVENUECAT_CLIENT_ID` und `REVENUECAT_CLIENT_SECRET` setzen. Ohne diese Werte zeigt die App nur den
+      Schlüssel-Weg – die App funktioniert also auch, während die Registrierung läuft.
 - [ ] Optional: `RESEND_API_KEY` + `MAIL_FROM` (Passwort vergessen), `TELEGRAM_BOT_TOKEN` + `TELEGRAM_BOT_NAME`.
 - [ ] `SIGNUP=closed` setzen, falls du Registrierungen zeitweise stoppen willst.
 - [ ] Bestehendes Dashboard übernehmen: alte Quellen-Variablen in `.env` lassen und einmal

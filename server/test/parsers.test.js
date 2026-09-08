@@ -11,7 +11,7 @@ import { sumSales, sumFinance, makeJwt, salesByApp, reportUrl, appleFehler, zusa
 import { parseReport, storeInfoAusApps, zuStore } from '../sources/admob.js';
 import { ausITunes, ausPlaySeite, findeIcon } from '../icons.js';
 import { parse as parseAdsense } from '../sources/adsense.js';
-import { chartToDaily, projects, mergeProjects, fetchData } from '../sources/revenuecat.js';
+import { chartToDaily, mergeProjects, fetchData } from '../sources/revenuecat.js';
 
 const fx = (f) => fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', f), 'utf8');
 
@@ -49,7 +49,7 @@ test('Play: fehlender Bucket ist kein Fehler, sondern "noch nichts da"', async (
   const vierNullVier = async () => {
     throw new Error('GET https://storage.googleapis.com/storage/v1/b/pubsite_prod_rev_0/o -> 404: {"error":{"code":404}}');
   };
-  const r = await playFetch({ cfg, holeToken, fetchJSON: vierNullVier });
+  const r = await playFetch({ eintrag: cfg, holeToken, fetchJSON: vierNullVier });
   assert.deepEqual(r.daily, []);
   assert.deepEqual(r.payouts, []);
   // Der Hinweis nennt beide möglichen Ursachen und den geprüften Bucket-Namen.
@@ -58,11 +58,11 @@ test('Play: fehlender Bucket ist kein Fehler, sondern "noch nichts da"', async (
   assert.match(r.note, /PLAY_GCS_BUCKET/);
 
   // Ein leerer, aber vorhandener Bucket ist dagegen eindeutig: nur noch kein Bericht.
-  const leer = await playFetch({ cfg, holeToken, fetchJSON: async () => ({ items: [] }) });
+  const leer = await playFetch({ eintrag: cfg, holeToken, fetchJSON: async () => ({ items: [] }) });
   assert.match(leer.note, /Noch kein Earnings-Bericht im Bucket/);
 
   // Alles andere bleibt ein echter Fehler - eine fehlende Berechtigung darf nicht durchrutschen.
-  await assert.rejects(() => playFetch({ cfg, holeToken, fetchJSON: async () => { throw new Error('GET … -> 403: kein Zugriff'); } }), /403/);
+  await assert.rejects(() => playFetch({ eintrag: cfg, holeToken, fetchJSON: async () => { throw new Error('GET … -> 403: kein Zugriff'); } }), /403/);
 });
 
 test('ZIP entpacken (Store und Deflate)', () => {
@@ -237,18 +237,33 @@ test('RevenueCat-Chart defensiv lesen', () => {
   assert.deepEqual(chartToDaily({}, 'EUR'), []);
 });
 
-test('RevenueCat: nummerierte Projekt-Paare lesen', () => {
-  assert.deepEqual(projects({ REVENUECAT_API_KEY: 'k1', REVENUECAT_PROJECT_ID: 'p1' }),
-    [{ key: 'k1', id: 'p1', label: 'Projekt 1' }]);
-  assert.deepEqual(projects({
+test('Alte flache Konfiguration wird zu Einträgen je Quelle', async () => {
+  process.env.TOKEN_ENC_KEY ||= 'test-enc-key-mindestens-16-zeichen';
+  const { konfiguration, eintraege } = await import('../quellen.js');
+  const { setConfig } = await import('../users.js');
+  // So sah die Konfiguration vor der Mehrfach-Unterstützung aus: ein Wert je Name,
+  // RevenueCat mit nummerierten Paaren.
+  const konto = { id: 'u1', config: null };
+  await setConfig(konto, {
     REVENUECAT_API_KEY: 'k1', REVENUECAT_PROJECT_ID: 'p1', REVENUECAT_LABEL: 'App A',
     REVENUECAT_API_KEY_2: 'k2', REVENUECAT_PROJECT_ID_2: 'p2',
-    REVENUECAT_API_KEY_3: 'k3', // Projekt-ID fehlt -> wird übersprungen
-  }), [
-    { key: 'k1', id: 'p1', label: 'App A' },
-    { key: 'k2', id: 'p2', label: 'Projekt 2' },
-  ]);
-  assert.deepEqual(projects({}), []);
+    REVENUECAT_API_KEY_3: 'k3', // Projekt-ID fehlt -> unvollständig, fällt weg
+    ADMOB_PUBLISHER_ID: 'pub-1', WISE_API_TOKEN: 't', WISE_PROFILE_ID: '4711',
+    ASC_KEY_ID: 'k', // allein zu wenig für den App Store
+  });
+
+  const migriert = konfiguration(konto);
+  assert.equal(migriert.v, 2);
+  const rc = eintraege(migriert, 'revenuecat');
+  assert.deepEqual(rc.map((e) => e.REVENUECAT_PROJECT_ID), ['p1', 'p2']);
+  assert.equal(rc[0].label, 'App A');
+  assert.equal(eintraege(migriert, 'admob')[0].ADMOB_PUBLISHER_ID, 'pub-1');
+  assert.equal(eintraege(migriert, 'wise')[0].WISE_PROFILE_ID, '4711');
+  assert.equal(eintraege(migriert, 'appstore').length, 0); // unvollständig, gar nicht erst übernommen
+  assert.ok(rc.every((e) => e.id), 'jeder Eintrag braucht eine eigene ID');
+
+  // Ein leeres Konto ergibt eine leere Konfiguration, keine Fehlermeldung.
+  assert.deepEqual(konfiguration({ config: null }), { v: 2, quellen: {} });
 });
 
 test('RevenueCat: zwei Projekte zusammenrechnen', () => {
@@ -285,26 +300,35 @@ test('RevenueCat: ein kaputtes Projekt blockiert das andere nicht', async () => 
     if (url.includes('/charts/')) throw new Error('403 kein Chart-Recht');
     return { currency: 'EUR', metrics: [{ id: 'mrr', value: 33 }, { id: 'revenue', value: 99 }] };
   };
-  const r = await fetchData({ cfg, fetchJSON });
-  assert.equal(r.extra.mrr, 33);
-  assert.equal(r.extra.projects.length, 1);
-  assert.match(r.note, /Nicht abrufbar: Projekt 2/);
-  assert.match(r.note, /Tagesverlauf nicht verfügbar/);
-  // Das erfolgreiche Projekt steht einzeln in der Liste, damit die Übersicht zeigen kann,
-  // welche App überhaupt zählt.
-  assert.deepEqual(r.extra.projects.map((p) => p.label), ['Projekt 1']);
+  // Ein Eintrag ist ein Projekt; der Sammellauf führt mehrere zusammen.
+  const gut = await fetchData({ eintrag: { REVENUECAT_API_KEY: 'k1', REVENUECAT_PROJECT_ID: 'gut', label: 'App A' }, fetchJSON });
+  assert.equal(gut.extra.mrr, 33);
+  assert.match(gut.note, /Tagesverlauf nicht verfügbar/);
+  await assert.rejects(() => fetchData({ eintrag: { REVENUECAT_API_KEY: 'k2', REVENUECAT_PROJECT_ID: 'kaputt' }, fetchJSON }), /401/);
+
+  // Mehrere Einträge: Zahlen summiert, Projektliste aneinandergehängt, Fehler im Hinweis.
+  const { vereine } = await import('../collect.js');
+  const zwei = await fetchData({ eintrag: { REVENUECAT_API_KEY: 'k3', REVENUECAT_PROJECT_ID: 'auch-gut', label: 'App B' }, fetchJSON });
+  const zusammen = vereine([gut, zwei], ['App C: 401 Unauthorized']);
+  assert.equal(zusammen.extra.mrr, 66);
+  assert.deepEqual(zusammen.extra.projects.map((p) => p.label), ['App A', 'App B']);
+  assert.match(zusammen.note, /Nicht abrufbar: App C/);
+  assert.match(zusammen.note, /2 Einträge zusammengerechnet/);
 });
 
-test('Quellen: eingerichtet nur mit vollständiger Konto-Konfiguration', async () => {
-  const { SOURCES, FIELDS } = await import('../sources/index.js');
-  const alt = process.env.GOOGLE_CLIENT_ID;
-  process.env.GOOGLE_CLIENT_ID = 'x'; process.env.GOOGLE_CLIENT_SECRET = 'y';
-  const by = Object.fromEntries(SOURCES.map((s) => [s.meta.id, s]));
-  assert.ok(!by.wise.configured({}));
-  assert.ok(by.wise.configured({ WISE_API_TOKEN: 't', WISE_PROFILE_ID: '1' }));
-  assert.ok(by.admob.configured({ ADMOB_PUBLISHER_ID: 'pub-1' }));
-  assert.ok(!by.appstore.configured({ ASC_KEY_ID: 'k' }));
-  // Jedes Pflichtfeld einer Quelle ist auch ein Formularfeld.
-  for (const s of SOURCES) for (const k of s.meta.needs) assert.ok(FIELDS.has(k), `${s.meta.id}: ${k} fehlt in fields`);
-  if (alt === undefined) delete process.env.GOOGLE_CLIENT_ID; else process.env.GOOGLE_CLIENT_ID = alt;
+test('Quellen: ein Eintrag ist erst mit allen Pflichtwerten nutzbar', async () => {
+  const { SOURCES, byId } = await import('../sources/index.js');
+  assert.ok(!byId('wise').vollstaendig({}));
+  assert.ok(byId('wise').vollstaendig({ WISE_API_TOKEN: 't', WISE_PROFILE_ID: '1' }));
+  assert.ok(byId('admob').vollstaendig({ ADMOB_PUBLISHER_ID: 'pub-1' }));
+  assert.ok(!byId('appstore').vollstaendig({ ASC_KEY_ID: 'k' }));
+  // RevenueCat geht mit Schlüssel oder mit Login, aber nie ohne Projekt.
+  assert.ok(byId('revenuecat').vollstaendig({ REVENUECAT_PROJECT_ID: 'p', REVENUECAT_API_KEY: 'k' }));
+  assert.ok(byId('revenuecat').vollstaendig({ REVENUECAT_PROJECT_ID: 'p', oauth: true }));
+  assert.ok(!byId('revenuecat').vollstaendig({ REVENUECAT_PROJECT_ID: 'p' }));
+  // Jedes Pflichtfeld einer Quelle ist auch ein Formularfeld - sonst wäre es nicht einzugeben.
+  for (const s of SOURCES) {
+    const keys = new Set(s.meta.felder.map((f) => f.key));
+    for (const k of s.meta.needs) assert.ok(keys.has(k), `${s.meta.id}: ${k} fehlt in felder`);
+  }
 });

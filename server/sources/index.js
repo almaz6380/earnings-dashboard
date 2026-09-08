@@ -8,5 +8,4 @@ import * as paypal from './paypal.js';
 
 export const SOURCES = [revenuecat, admob, adsense, play, appstore, wise, paypal];
 
-// Alle Konfigurationsfelder aller Quellen, nach Schlüssel.
-export const FIELDS = new Map(SOURCES.flatMap((s) => (s.meta.fields || []).map((f) => [f.key, { ...f, source: s.meta.id }])));
+export const byId = (id) => SOURCES.find((s) => s.meta.id === id) || null;

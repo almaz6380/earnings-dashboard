@@ -1,14 +1,24 @@
 // AdMob API: Netzwerk-Bericht, geschätzte Einnahmen pro Tag (Micros).
-import { googleConfigured } from '../google/oauth.js';
 import { daysAgo } from '../http.js';
 
 export const meta = { id: 'admob', label: 'AdMob', art: 'Werbeeinnahmen (Schätzung)', kind: 'earned',
-  needs: ['ADMOB_PUBLISHER_ID'], google: true,
-  help: 'Braucht die Google-Verbindung oben. Die Publisher-ID steht in AdMob → Einstellungen → Kontoinformationen.',
-  fields: [{ key: 'ADMOB_PUBLISHER_ID', label: 'Publisher-ID', hint: 'Form pub-1234567890123456' }] };
+  needs: ['ADMOB_PUBLISHER_ID'], google: true, mehrfach: true, entdeckbar: true,
+  konsole: { url: 'https://apps.admob.com/v2/account/settings', text: 'AdMob-Kontoeinstellungen' },
+  help: 'Wähle die Google-Verbindung, dann suchen wir die Publisher-ID selbst.',
+  felder: [{ key: 'ADMOB_PUBLISHER_ID', label: 'Publisher-ID', hint: 'Form pub-1234567890123456' }] };
 
-export function configured(cfg = {}) {
-  return !!(cfg.ADMOB_PUBLISHER_ID && googleConfigured());
+export const vollstaendig = (e) => !!e?.ADMOB_PUBLISHER_ID;
+
+// Welche AdMob-Konten diese Google-Verbindung sieht. Erspart das Abtippen der ID.
+export async function entdecke({ google }) {
+  const r = await google.fetch('https://admob.googleapis.com/v1/accounts?pageSize=50');
+  return (r.account || r.accounts || [])
+    .filter((a) => a.publisherId)
+    .map((a) => ({
+      werte: { ADMOB_PUBLISHER_ID: a.publisherId },
+      label: a.publisherId,
+      hinweis: a.currencyCode ? `Währung ${a.currencyCode}` : null,
+    }));
 }
 
 const dateObj = (d) => ({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() });
@@ -42,9 +52,9 @@ async function storeInfo(pub, fetchJSON) {
   }
 }
 
-export async function fetchData({ cfg = {}, google, days = 60 } = {}) {
+export async function fetchData({ eintrag = {}, google, days = 60 } = {}) {
   const googleFetch = google.fetch;
-  const pub = String(cfg.ADMOB_PUBLISHER_ID || '').replace(/^accounts\//, '');
+  const pub = String(eintrag.ADMOB_PUBLISHER_ID || '').replace(/^accounts\//, '');
   const body = {
     reportSpec: {
       dateRange: { startDate: dateObj(daysAgo(days)), endDate: dateObj(new Date()) },

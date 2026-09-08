@@ -1,25 +1,67 @@
 // Ein Sammellauf je Konto: alle eingerichteten Quellen abrufen, in den Verlauf mischen,
 // Zusammenfassung speichern. Fehler einer Quelle blockieren die anderen nicht.
 import { loadJSON, saveJSON } from './store.js';
-import { getRates, normBase } from './fx.js';
+import { getRates, normBase, round2 } from './fx.js';
 import { SOURCES } from './sources/index.js';
 import { buildSummary } from './summary.js';
 import { ergaenzeIcons } from './icons.js';
 import { sendDaily } from './notify.js';
-import { getUser, getConfig, listUserIds, ukey } from './users.js';
+import { getUser, listUserIds, ukey } from './users.js';
+import { konfiguration, nutzbare, beschriftung } from './quellen.js';
 import { googleFor } from './google/oauth.js';
+import { revenuecatFor, konfiguriert as rcKonfiguriert } from './revenuecat/oauth.js';
 
 export const emptyHistory = () => ({ daily: {}, payouts: {}, balances: {}, sources: {}, apps: {} });
 
 export const baseOf = (u) => normBase(u?.settings?.baseCurrency);
 
+// Mehrere Einträge einer Quelle (zwei AdMob-Konten, drei RevenueCat-Projekte)
+// ergeben eine einzige Antwort: Listen werden aneinandergehängt, Zahlen in `extra`
+// summiert, Hinweise gesammelt. Was einzeln fehlschlägt, blockiert den Rest nicht.
+export function vereine(teile, fehler = []) {
+  const alle = (f) => teile.flatMap((t) => t[f] || []);
+  const extra = {};
+  for (const feld of new Set(teile.flatMap((t) => Object.keys(t.extra || {})))) {
+    const werte = teile.map((t) => t.extra?.[feld]).filter((v) => v != null);
+    if (!werte.length) continue;
+    if (werte.every((v) => typeof v === 'number')) extra[feld] = round2(werte.reduce((a, b) => a + b, 0));
+    else if (werte.every((v) => Array.isArray(v))) extra[feld] = werte.flat();
+    else extra[feld] = werte[0];
+  }
+  const waehrungen = new Set(teile.map((t) => t.currency).filter(Boolean));
+  const hinweise = teile.map((t) => t.note).filter(Boolean);
+  if (fehler.length) hinweise.unshift(`Nicht abrufbar: ${fehler.join(' | ')}`);
+  if (teile.length > 1) hinweise.push(`${teile.length} Einträge zusammengerechnet.`);
+  return {
+    currency: waehrungen.size === 1 ? [...waehrungen][0] : null,
+    asOf: teile.map((t) => t.asOf).filter(Boolean).sort().at(-1) || new Date().toISOString(),
+    daily: alle('daily'),
+    payouts: alle('payouts'),
+    apps: alle('apps'),
+    balance: null,
+    balances: teile.flatMap((t) => t.balances || (t.balance ? [t.balance] : [])),
+    extra,
+    note: hinweise.join(' ') || null,
+  };
+}
+
+// Einen einzelnen Eintrag abrufen. Getrennt, damit der Probeabruf beim Einrichten
+// denselben Weg nimmt wie der Sammellauf.
+export function zugaenge(u, src, eintrag) {
+  return {
+    eintrag,
+    base: baseOf(u),
+    google: src.meta.google ? googleFor(u.id, eintrag.google) : undefined,
+    revenuecat: rcKonfiguriert() ? revenuecatFor(u.id) : undefined,
+  };
+}
+
 export async function runCollect({ user, userId, notify = true } = {}) {
   const u = user || (await getUser(userId));
   if (!u) throw new Error('Konto nicht gefunden.');
   const started = Date.now();
-  const cfg = getConfig(u);
+  const cfg = konfiguration(u);
   const base = baseOf(u);
-  const google = googleFor(u.id);
   const fx = await getRates(base);
   const hKey = ukey(u.id, 'history'), lKey = ukey(u.id, 'latest');
   const history = (await loadJSON(hKey)) || emptyHistory();
@@ -30,20 +72,34 @@ export async function runCollect({ user, userId, notify = true } = {}) {
   for (const src of SOURCES) {
     const id = src.meta.id;
     const s = (history.sources[id] ||= {});
-    if (!src.configured(cfg)) { results[id] = { status: 'unconfigured' }; s.status = 'unconfigured'; continue; }
+    const liste = nutzbare(cfg, id);
+    if (!liste.length) { results[id] = { status: 'unconfigured' }; s.status = 'unconfigured'; continue; }
     const t0 = Date.now();
-    try {
-      const knownDates = new Set(Object.keys(history.daily[id] || {}));
-      const knownMonths = new Set(Object.keys(history.payouts[id] || {}));
-      const data = await src.fetchData({ cfg, google, base, knownDates, knownMonths });
-      mergeSource(history, id, data, today);
-      mergeApps(history, id, data, today);
-      Object.assign(s, { status: 'ok', lastOk: new Date().toISOString(), lastError: null, asOf: data.asOf, note: data.note || null, extra: data.extra || {}, currency: data.currency });
-      results[id] = { status: 'ok', ms: Date.now() - t0, days: data.daily?.length || 0 };
-    } catch (e) {
-      Object.assign(s, { status: 'error', lastError: e.message.slice(0, 400), lastTry: new Date().toISOString() });
-      results[id] = { status: 'error', error: e.message.slice(0, 400), ms: Date.now() - t0 };
+    // Bei genau einem Eintrag darf die Quelle bereits geholte Tage überspringen.
+    // Bei mehreren geht das nicht: die bekannten Tage stammen dann womöglich von
+    // einem anderen Konto, und der zweite Eintrag würde sie stillschweigend auslassen.
+    const einzeln = liste.length === 1;
+    const knownDates = new Set(einzeln ? Object.keys(history.daily[id] || {}) : []);
+    const knownMonths = new Set(einzeln ? Object.keys(history.payouts[id] || {}) : []);
+    const teile = [], fehler = [];
+    for (const [i, eintrag] of liste.entries()) {
+      try {
+        teile.push(await src.fetchData({ ...zugaenge(u, src, eintrag), knownDates, knownMonths }));
+      } catch (e) {
+        fehler.push(`${beschriftung(src, eintrag, i)}: ${e.message.slice(0, 200)}`);
+      }
     }
+    if (!teile.length) {
+      const msg = fehler.join(' | ') || 'Abruf fehlgeschlagen.';
+      Object.assign(s, { status: 'error', lastError: msg.slice(0, 400), lastTry: new Date().toISOString() });
+      results[id] = { status: 'error', error: msg.slice(0, 400), ms: Date.now() - t0 };
+      continue;
+    }
+    const data = vereine(teile, fehler);
+    mergeSource(history, id, data, today);
+    mergeApps(history, id, data, today);
+    Object.assign(s, { status: 'ok', lastOk: new Date().toISOString(), lastError: null, asOf: data.asOf, note: data.note || null, extra: data.extra || {}, currency: data.currency });
+    results[id] = { status: 'ok', ms: Date.now() - t0, days: data.daily?.length || 0, eintraege: teile.length, fehler: fehler.length || undefined };
   }
 
   // Icons erst nach allen Quellen: braucht die gesammelten Store-Kennungen.

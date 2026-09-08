@@ -6,18 +6,19 @@ import { getBuffer, ymd, daysAgo } from '../http.js';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 
 export const meta = { id: 'appstore', label: 'App Store', art: 'Erlöse (Sales) + Auszahlung (Finance)', kind: 'payout',
-  needs: ['ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_PRIVATE_KEY', 'ASC_VENDOR_NUMBER'],
-  help: 'App Store Connect → Nutzer und Zugriff → Integrationen → App Store Connect API → Team-Schlüssel mit Rolle „Finance" erzeugen.',
-  fields: [
+  needs: ['ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_PRIVATE_KEY', 'ASC_VENDOR_NUMBER'], mehrfach: true,
+  konsole: { url: 'https://appstoreconnect.apple.com/access/integrations/api', text: 'App-Store-Connect-Schlüssel' },
+  // Apple bietet für Finanzberichte keinen Login für Fremd-Apps an - nur einen
+  // Schlüssel, den du selbst erzeugst. Die Vendor-Nummer gibt keine Schnittstelle heraus.
+  help: 'Nutzer und Zugriff → Integrationen → App Store Connect API → Team-Schlüssel mit Rolle „Finance" erzeugen und die .p8-Datei laden.',
+  felder: [
     { key: 'ASC_KEY_ID', label: 'Key-ID' },
     { key: 'ASC_ISSUER_ID', label: 'Issuer-ID', hint: 'steht über der Schlüsselliste' },
-    { key: 'ASC_PRIVATE_KEY', label: 'Privater Schlüssel (.p8)', secret: true, multiline: true, hint: 'Inhalt der .p8-Datei einfügen (mit BEGIN/END-Zeilen) oder base64-kodiert' },
+    { key: 'ASC_PRIVATE_KEY', label: 'Privater Schlüssel (.p8)', secret: true, multiline: true, datei: '.p8', hint: 'Datei auswählen oder Inhalt einfügen' },
     { key: 'ASC_VENDOR_NUMBER', label: 'Vendor-Nummer', hint: 'Zahlungen und Finanzberichte → oben links' },
   ] };
 
-export function configured(cfg = {}) {
-  return !!(cfg.ASC_KEY_ID && cfg.ASC_ISSUER_ID && cfg.ASC_PRIVATE_KEY && cfg.ASC_VENDOR_NUMBER);
-}
+export const vollstaendig = (e) => !!(e?.ASC_KEY_ID && e?.ASC_ISSUER_ID && e?.ASC_PRIVATE_KEY && e?.ASC_VENDOR_NUMBER);
 
 export function privateKey(cfg) {
   const raw = String(cfg.ASC_PRIVATE_KEY || '').trim();
@@ -62,7 +63,7 @@ async function report(cfg, path, filter) {
   return (buf[0] === 0x1f && buf[1] === 0x8b ? zlib.gunzipSync(buf) : buf).toString('utf8');
 }
 
-export async function fetchData({ cfg = {}, days = 14, knownDates = new Set(), knownMonths = new Set() } = {}) {
+export async function fetchData({ eintrag: cfg = {}, days = 14, knownDates = new Set(), knownMonths = new Set() } = {}) {
   const vendor = cfg.ASC_VENDOR_NUMBER;
   const daily = [], payouts = [], apps = [], errors = [];
   let currency = null;

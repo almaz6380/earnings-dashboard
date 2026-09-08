@@ -5,9 +5,10 @@
 //   node server/cli.js users                           Konten auflisten
 import 'dotenv/config';
 import { runCollect, runCollectAll } from './collect.js';
-import { createUser, findByEmail, setConfig, listUserIds, getUser, ukey } from './users.js';
+import { createUser, findByEmail, listUserIds, getUser, ukey, setConfig } from './users.js';
 import { loadJSON, saveJSON, deleteJSON } from './store.js';
-import { SOURCES, FIELDS } from './sources/index.js';
+import { SOURCES } from './sources/index.js';
+import { konfiguration, nutzbare, neueId } from './quellen.js';
 
 const [cmd = 'collect', ...args] = process.argv.slice(2);
 const notify = args.includes('--notify');
@@ -34,9 +35,22 @@ if (cmd === 'collect') {
   const [email, password] = rest;
   if (!email || !password) { console.error('Aufruf: migrate <email> <passwort>'); process.exit(1); }
   const u = (await findByEmail(email)) || (await createUser({ email, password }));
-  const patch = {};
-  for (const k of FIELDS.keys()) if (process.env[k]) patch[k] = process.env[k];
-  await setConfig(u, patch);
+  // Aus den flachen Umgebungsvariablen je Quelle einen Eintrag bauen. RevenueCat
+  // hatte nummerierte Paare (_2 … _5), daraus werden mehrere Einträge.
+  const quellen = {};
+  for (const src of SOURCES) {
+    const liste = [];
+    for (const n of src.meta.id === 'revenuecat' ? [1, 2, 3, 4, 5] : [1]) {
+      const suffix = n === 1 ? '' : `_${n}`;
+      const eintrag = { id: neueId() };
+      for (const f of src.meta.felder) if (process.env[`${f.key}${suffix}`]) eintrag[f.key] = process.env[`${f.key}${suffix}`];
+      const label = process.env[`REVENUECAT_LABEL${suffix}`];
+      if (src.meta.id === 'revenuecat' && label) eintrag.label = label;
+      if (src.vollstaendig(eintrag)) liste.push(eintrag);
+    }
+    if (liste.length) quellen[src.meta.id] = liste;
+  }
+  await setConfig(u, { v: 2, quellen });
   for (const name of ['history', 'latest', 'google_tokens']) {
     const alt = await loadJSON(name);
     if (!alt) continue;
@@ -44,7 +58,9 @@ if (cmd === 'collect') {
     await deleteJSON(name);
     console.log(`${name} -> Konto ${u.email}`);
   }
-  console.log(`Konto ${u.email}: ${Object.keys(patch).length} Zugangsdaten übernommen (${SOURCES.filter((s) => s.configured(patch)).map((s) => s.meta.label).join(', ') || 'keine Quelle'}).`);
+  const cfg = konfiguration(u);
+  const uebernommen = SOURCES.filter((s) => nutzbare(cfg, s.meta.id).length).map((s) => `${s.meta.label} (${nutzbare(cfg, s.meta.id).length})`);
+  console.log(`Konto ${u.email}: ${uebernommen.join(', ') || 'keine Quelle'} übernommen.`);
   console.log('Die Quellen-Variablen können jetzt aus der Umgebung entfernt werden.');
 } else {
   console.error('Bekannt: collect, users, migrate');

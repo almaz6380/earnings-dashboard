@@ -12,7 +12,9 @@ const { mergeSource, mergeApps, pruneHistory, emptyHistory } = await import('../
 const { buildSummary } = await import('../summary.js');
 const { formatDaily } = await import('../notify.js');
 const { makeState, verifyState, makeTicket, verifyTicket } = await import('../google/oauth.js');
-const { hashPassword, checkPassword, passwordProblem, maskConfig, normEmail, emailOk } = await import('../users.js');
+const { hashPassword, checkPassword, passwordProblem, normEmail, emailOk } = await import('../users.js');
+const { maskiere, beschriftung } = await import('../quellen.js');
+const { byId } = await import('../sources/index.js');
 
 const USER = { id: 'abc123', pwv: 1 };
 
@@ -66,12 +68,21 @@ test('Passwörter: scrypt-Hash, Prüfung, Mindestlänge', () => {
   assert.ok(!emailOk('kein-at'));
 });
 
-test('Konfiguration maskiert: Geheimnisse nur mit Endung, Rest im Klartext', () => {
-  const fields = new Map([['WISE_API_TOKEN', { secret: true }], ['WISE_PROFILE_ID', {}]]);
-  const m = maskConfig({ WISE_API_TOKEN: 'abcdefghijkl', WISE_PROFILE_ID: '4711', UNBEKANNT: 'x' }, fields);
-  assert.deepEqual(m.WISE_API_TOKEN, { set: true, hint: '…ijkl' });
-  assert.deepEqual(m.WISE_PROFILE_ID, { set: true, value: '4711' });
-  assert.equal(m.UNBEKANNT.value, undefined); // unbekannte Felder gelten als geheim
+test('Eintrag maskiert: Geheimnisse nur mit Endung, Rest im Klartext', () => {
+  const wise = byId('wise');
+  const m = maskiere(wise, { id: 'e1', WISE_API_TOKEN: 'abcdefghijkl', WISE_PROFILE_ID: '4711' });
+  assert.deepEqual(m.werte.WISE_API_TOKEN, { set: true, hint: '…ijkl' });
+  assert.deepEqual(m.werte.WISE_PROFILE_ID, { set: true, value: '4711' });
+  assert.equal(m.vollstaendig, true);
+  // Ein halber Eintrag ist als solcher erkennbar, blockiert aber nichts.
+  assert.equal(maskiere(wise, { id: 'e2', WISE_API_TOKEN: 'x' }).vollstaendig, false);
+  // Ohne eigenen Namen dient ein Pflichtwert als Beschriftung - aber niemals ein
+  // geheimer: der Wise-Token darf nicht als Überschrift auf dem Schirm stehen.
+  assert.equal(beschriftung(wise, { WISE_API_TOKEN: 'geheim-token', WISE_PROFILE_ID: '4711' }), '4711');
+  assert.equal(beschriftung(wise, { WISE_API_TOKEN: 'geheim-token' }, 1), 'Wise 2');
+  assert.equal(beschriftung(wise, { label: 'Firma' }), 'Firma');
+  // Auch beim App Store, wo der private Schlüssel das erste Geheimnis ist.
+  assert.equal(beschriftung(byId('appstore'), { ASC_PRIVATE_KEY: 'sehr-geheim', ASC_KEY_ID: 'K1' }), 'K1');
 });
 
 test('Wechselkurs: Basis, Fremdwährung, unbekannt', () => {
@@ -304,4 +315,62 @@ test('CORS: nur App-Origins, Preflight wird beantwortet', () => {
   res = fakeRes();
   assert.equal(applyCors({ method: 'GET', headers: {} }, res), false);
   assert.equal(res.code, null);
+});
+
+// ---- Mehrere Verbindungen und Einträge --------------------------------------
+const { normalisiere } = await import('../google/oauth.js');
+const { teileState, makeState: rcState, verifyState: rcVerify } = await import('../revenuecat/oauth.js');
+const { speichereEintrag, loescheEintrag, eintraege: leseEintraege, konfiguration, nutztVerbindung } = await import('../quellen.js');
+
+test('Google: die frühere Einzelverbindung wird zu einer Liste', () => {
+  assert.deepEqual(normalisiere(null), { v: 2, verbindungen: [] });
+  const alt = { refresh: 'x', scope: 'a b', email: 'ich@example.com', connectedAt: '2026-01-01' };
+  const neu = normalisiere(alt);
+  assert.equal(neu.v, 2);
+  assert.equal(neu.verbindungen.length, 1);
+  assert.equal(neu.verbindungen[0].id, 'g1');
+  assert.equal(neu.verbindungen[0].email, 'ich@example.com');
+  // Was schon Liste ist, bleibt unangetastet.
+  assert.equal(normalisiere(neu), neu);
+});
+
+test('Einträge anlegen, ändern, löschen; Verbindung bleibt zugeordnet', async () => {
+  const konto = { id: 'u2', config: null };
+  await speichereEintrag(konto, 'admob', { ADMOB_PUBLISHER_ID: 'pub-1', google: 'gA', label: 'Privat' });
+  await speichereEintrag(konto, 'admob', { ADMOB_PUBLISHER_ID: 'pub-2', google: 'gB' });
+  let liste = leseEintraege(konfiguration(konto), 'admob');
+  assert.equal(liste.length, 2);
+  assert.equal(liste[0].label, 'Privat');
+  assert.notEqual(liste[0].id, liste[1].id);
+
+  // Ändern über die ID, nicht über die Position.
+  await speichereEintrag(konto, 'admob', { id: liste[1].id, label: 'Firma' });
+  liste = leseEintraege(konfiguration(konto), 'admob');
+  assert.equal(liste[1].label, 'Firma');
+  assert.equal(liste[1].ADMOB_PUBLISHER_ID, 'pub-2', 'unerwähnte Felder bleiben stehen');
+
+  // Welche Quellen an einer Google-Verbindung hängen - für die Warnung beim Trennen.
+  assert.deepEqual(nutztVerbindung(konfiguration(konto), 'gB'), ['AdMob']);
+
+  // Leerer Wert löscht das Feld, null ebenso.
+  await speichereEintrag(konto, 'admob', { id: liste[0].id, label: '' });
+  assert.equal(leseEintraege(konfiguration(konto), 'admob')[0].label, undefined);
+
+  await loescheEintrag(konto, 'admob', liste[0].id);
+  assert.deepEqual(leseEintraege(konfiguration(konto), 'admob').map((e) => e.label), ['Firma']);
+  await loescheEintrag(konto, 'admob', liste[1].id);
+  assert.deepEqual(konfiguration(konto), { v: 2, quellen: {} });
+});
+
+test('RevenueCat-State: signiert, mit Nonce für den PKCE-Verifier', () => {
+  const s = rcState('abc123', { native: true });
+  assert.equal(rcVerify(s).u, 'abc123');
+  assert.equal(rcVerify(s).native, true);
+  // Ein Google-State darf hier nicht durchgehen und umgekehrt.
+  assert.equal(rcVerify(makeState('abc123')), null);
+  const { nonce, state } = teileState(`n123~${s}`);
+  assert.equal(nonce, 'n123');
+  assert.equal(state.u, 'abc123');
+  assert.equal(teileState('ohne-tilde').state, null);
+  assert.equal(teileState(`n123~${s}x`).state, null);
 });

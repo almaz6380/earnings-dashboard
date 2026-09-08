@@ -1,28 +1,48 @@
-// Zugangsdaten der Quellen je Konto: nie im Klartext zurückgeben, nur „gesetzt" + Endung.
+// Quellen einrichten: Einträge lesen, anlegen, ändern, löschen.
+// Geheimnisse gehen nie zurück an die App - nur „gesetzt" und die letzten Zeichen.
 import { requireAuth } from '../auth.js';
 import { withCors } from '../cors.js';
-import { getConfig, setConfig, maskConfig } from '../users.js';
-import { SOURCES, FIELDS } from '../sources/index.js';
+import { SOURCES, byId } from '../sources/index.js';
+import { konfiguration, eintraege, maskiere, speichereEintrag, loescheEintrag, istEingerichtet, nutztVerbindung } from '../quellen.js';
+import { verbindungen, googleConfigured } from '../google/oauth.js';
+import { status as rcStatus } from '../revenuecat/oauth.js';
 import { body } from './_body.js';
 
-function antwort(cfg) {
+async function antwort(u) {
+  const cfg = konfiguration(u);
   return {
-    values: maskConfig(cfg, FIELDS),
-    configured: Object.fromEntries(SOURCES.map((s) => [s.meta.id, s.configured(cfg)])),
+    quellen: SOURCES.map((s) => ({
+      ...s.meta,
+      configured: istEingerichtet(cfg, s.meta.id),
+      eintraege: eintraege(cfg, s.meta.id).map((e, i) => maskiere(s, e, i)),
+    })),
+    google: { verfuegbar: googleConfigured(), verbindungen: await verbindungen(u.id) },
+    revenuecat: await rcStatus(u.id),
   };
 }
 
 export default withCors(requireAuth(async (req, res) => {
   res.setHeader('cache-control', 'no-store');
-  if (req.method === 'GET') return res.status(200).json(antwort(getConfig(req.user)));
+  const u = req.user;
+  if (req.method === 'GET') return res.status(200).json(await antwort(u));
   if (req.method !== 'POST') return res.status(405).json({ fehler: 'Nur GET/POST.' });
   const b = body(req);
-  const patch = {};
-  for (const [k, v] of Object.entries(b.values || {})) {
-    if (!FIELDS.has(k)) continue;           // nur bekannte Felder
-    if (v === undefined) continue;
-    patch[k] = v === null ? '' : String(v); // '' = löschen
+  const src = byId(b.quelle);
+  if (!src) return res.status(400).json({ fehler: 'Unbekannte Quelle.' });
+  try {
+    if (b.action === 'delete') {
+      if (!b.id) return res.status(400).json({ fehler: 'Welcher Eintrag?' });
+      await loescheEintrag(u, b.quelle, b.id);
+    } else {
+      await speichereEintrag(u, b.quelle, b.eintrag || {});
+    }
+    return res.status(200).json(await antwort(u));
+  } catch (e) {
+    return res.status(400).json({ fehler: e.message });
   }
-  const cfg = await setConfig(req.user, patch);
-  return res.status(200).json(antwort(cfg));
 }));
+
+// Für die Warnung beim Trennen einer Google-Verbindung.
+export async function betroffeneQuellen(u, verbindungId) {
+  return nutztVerbindung(konfiguration(u), verbindungId);
+}

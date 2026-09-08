@@ -1,4 +1,4 @@
-// Für die App: Adresse, die sie im System-Browser öffnet, um Google zu verbinden.
+// Für die App: Adresse, die sie im System-Browser öffnet, um ein Google-Konto zu verbinden.
 import { requireAuth } from '../auth.js';
 import { withCors } from '../cors.js';
 import { baseUrl, makeTicket, googleConfigured } from '../google/oauth.js';

@@ -14,8 +14,15 @@ verbindet seine eigenen Quellen und sieht nur seine Zahlen:
 | Wechselkurse | EZB-Kurse über frankfurter.app | keiner |
 | Telegram / ntfy | tägliche Zusammenfassung aufs Handy | Chat-ID bzw. Topic im Konto |
 
-Jede Quelle ist optional und wird im Tab „Einrichten" mit den eigenen Zugangsdaten verbunden. Die Zugangsdaten
-liegen AES-verschlüsselt auf dem Server, werden nie angezeigt und nur lesend genutzt.
+Jede Quelle ist optional und wird im Tab „Einrichten" verbunden. Zwei Wege führen dorthin:
+
+- **Login:** Google (deckt AdMob, AdSense und Play ab) und RevenueCat. Ein Klick, kein Abtippen. Mehrere Konten je
+  Dienst sind möglich – etwa AdMob privat und die Play Console über die Firma.
+- **Schlüssel:** App Store Connect, Wise und PayPal. Diese Anbieter haben keinen offenen Login für Fremd-Apps;
+  dort erzeugt man einen Lese-Schlüssel und trägt ihn ein. Wo es geht, sucht die App die zugehörigen IDs selbst
+  (AdMob- und AdSense-Konten, RevenueCat-Projekte, Wise-Profile).
+
+Die Zugangsdaten liegen AES-verschlüsselt auf dem Server, werden nie angezeigt und nur lesend genutzt.
 
 Technik: Node/Express lokal, auf Vercel als Serverless-Funktionen (`api/`), React + Vite + recharts
 (`client/`), Speicher lokal als JSON in `data/` oder in der Supabase-Tabelle `earnings_kv`.
@@ -63,7 +70,8 @@ Screenshots und Einreichung: [docs/APP-STORE.md](docs/APP-STORE.md).
 ## Quellen einrichten
 
 Alle Werte werden im Tab „Einrichten" eingetragen (nicht mehr als Umgebungsvariablen). Die Namen unten sind die
-Feldbezeichnungen in der App; nur der Google-OAuth-Client (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`) bleibt beim Betreiber.
+Feldbezeichnungen in der App; beim Betreiber bleiben nur die OAuth-Clients (`GOOGLE_CLIENT_ID`/`_SECRET` und
+optional `REVENUECAT_CLIENT_ID`/`_SECRET`). Je Quelle sind mehrere Einträge möglich.
 
 ### RevenueCat
 Dashboard → Projekt → Project settings → API keys → **+ New secret API key** mit Berechtigung
@@ -151,8 +159,9 @@ Die Meldung geht nur beim Cron-Lauf raus, nicht beim Klick auf „Aktualisieren�
 server/   Express (lokal) + Handler, die auch als Vercel-Funktionen laufen
   sources/   eine Datei je Quelle: configured() + fetchData()
   collect.js Sammellauf, summary.js Kennzahlen, notify.js Meldung, fx.js Kurse
-  users.js Konten + verschlüsselte Konfiguration, auth.js Sitzungen, crypto.js Verschlüsselung
-  google/oauth.js Google-Login je Konto, cors.js Freigabe für die native App, mail.js Passwort vergessen
+  users.js Konten, quellen.js Einträge je Quelle (+ Migration), auth.js Sitzungen, crypto.js Verschlüsselung
+  google/oauth.js Google-Logins je Konto, revenuecat/oauth.js RevenueCat-Login (PKCE)
+  cors.js Freigabe für die native App, mail.js Passwort vergessen
 api/      Vercel-Einstiege (nur Re-Exports)
 client/   React-Client: Übersicht, Apps, Verlauf, Einrichten, Konto
   api.js Server-Adresse + Token (App), native.js Capacitor-Hooks

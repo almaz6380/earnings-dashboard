@@ -1,22 +1,21 @@
 // Google Play: monatliche Earnings-Berichte (echte Auszahlungsbeträge) aus dem Cloud-Storage-Bucket.
 // Datei: earnings/earnings_YYYYMM-<id>.zip -> CSV mit "Amount (Merchant Currency)".
-import { googleConfigured } from '../google/oauth.js';
 import { getJSON, getBuffer } from '../http.js';
 import { unzip } from '../zip.js';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 
 export const meta = { id: 'play', label: 'Google Play', art: 'Auszahlung (tatsächlich)', kind: 'payout',
-  needs: ['PLAY_GCS_BUCKET'], google: true,
-  help: 'Braucht die Google-Verbindung oben. Play Console → Berichte herunterladen → Finanzberichte → „Cloud Storage-URI kopieren". Dein Google-Konto braucht in der Play Console „Finanzdaten ansehen".',
-  fields: [{ key: 'PLAY_GCS_BUCKET', label: 'Cloud-Storage-Bucket', hint: 'nur der Name: pubsite_prod_rev_0123456789' }] };
+  needs: ['PLAY_GCS_BUCKET'], google: true, mehrfach: true,
+  konsole: { url: 'https://play.google.com/console', text: 'Play Console öffnen' },
+  // Den Bucket-Namen gibt keine Programmierschnittstelle heraus - der muss aus der Konsole kommen.
+  help: 'Play Console → Berichte herunterladen → Finanzberichte → „Cloud Storage-URI kopieren". Dein Google-Konto braucht dort „Finanzdaten ansehen".',
+  felder: [{ key: 'PLAY_GCS_BUCKET', label: 'Cloud-Storage-Bucket', hint: 'nur der Name: pubsite_prod_rev_0123456789' }] };
 
-export function configured(cfg = {}) {
-  return !!(cfg.PLAY_GCS_BUCKET && googleConfigured());
-}
+export const vollstaendig = (e) => !!e?.PLAY_GCS_BUCKET;
 
 // fetchJSON/fetchBuffer/holeToken sind einspeisbar, damit Tests ohne Netz laufen (wie in revenuecat.js).
-export async function fetchData({ cfg = {}, google, months = 2, fetchJSON = getJSON, fetchBuffer = getBuffer, holeToken = google?.token } = {}) {
-  const bucket = String(cfg.PLAY_GCS_BUCKET || '').replace(/^gs:\/\//, '').replace(/\/.*$/, '');
+export async function fetchData({ eintrag = {}, google, months = 2, fetchJSON = getJSON, fetchBuffer = getBuffer, holeToken = google?.token } = {}) {
+  const bucket = String(eintrag.PLAY_GCS_BUCKET || '').replace(/^gs:\/\//, '').replace(/\/.*$/, '');
   const token = await holeToken();
   const auth = { headers: { authorization: `Bearer ${token}` } };
   const leer = (note) => ({ currency: null, asOf: new Date().toISOString(), daily: [], payouts: [], apps: [], balance: null, extra: {}, note });

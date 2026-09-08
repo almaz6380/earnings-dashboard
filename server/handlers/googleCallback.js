@@ -10,8 +10,8 @@ export default async function handler(req, res) {
   if (error) return back({ google: 'fehler', msg: `Google: ${error}` });
   if (!(await getUser(st.u))) return back({ google: 'fehler', msg: 'Konto nicht gefunden.' });
   try {
-    const { email } = await exchangeCode(code, req, st.u);
-    return back({ google: 'ok', email: email || '' });
+    const { email, neu } = await exchangeCode(code, req, st.u);
+    return back({ google: 'ok', email: email || '', neu: neu ? '1' : '0' });
   } catch (e) {
     return back({ google: 'fehler', msg: e.message.slice(0, 300) });
   }

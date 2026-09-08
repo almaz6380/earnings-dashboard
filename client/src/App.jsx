@@ -155,11 +155,17 @@ export default function App() {
     }
   }, []);
 
-  // Ergebnis des Google-Logins anzeigen (Web: ?google=…, App: einnahmen://google?…).
-  const googleErgebnis = useCallback((q) => {
-    setFlash(q.get('google') === 'ok'
-      ? `Google verbunden${q.get('email') ? ` (${q.get('email')})` : ''}. Jetzt „Aktualisieren“ tippen.`
-      : `Google-Verbindung fehlgeschlagen: ${q.get('msg') || 'unbekannter Fehler'}`);
+  // Ergebnis eines Logins anzeigen (Web: ?google=…, App: einnahmen://google?…).
+  const loginErgebnis = useCallback((q) => {
+    if (q.get('google')) {
+      setFlash(q.get('google') === 'ok'
+        ? `Google verbunden${q.get('email') ? ` (${q.get('email')})` : ''}. Wähle jetzt unten die Konten aus.`
+        : `Google-Verbindung fehlgeschlagen: ${q.get('msg') || 'unbekannter Fehler'}`);
+    } else if (q.get('revenuecat')) {
+      setFlash(q.get('revenuecat') === 'ok'
+        ? 'RevenueCat verbunden. Wähle jetzt unten deine Projekte aus.'
+        : `RevenueCat-Anmeldung fehlgeschlagen: ${q.get('msg') || 'unbekannter Fehler'}`);
+    } else return;
     setTab('einrichten');
   }, []);
 
@@ -169,11 +175,11 @@ export default function App() {
       if (NATIV && e.status === 0) { setAuthed(true); setError(e.message); } else setAuthed(false);
     });
     const q = new URLSearchParams(location.search);
-    if (q.get('google')) {
-      googleErgebnis(q);
+    if (q.get('google') || q.get('revenuecat')) {
+      loginErgebnis(q);
       history.replaceState(null, '', location.pathname + location.hash);
     }
-  }, [googleErgebnis]);
+  }, [loginErgebnis]);
 
   useEffect(() => { if (authed) load(); }, [authed, load]);
   useEffect(() => { history.replaceState(null, '', `#${tab}`); }, [tab]);
@@ -186,12 +192,13 @@ export default function App() {
   useEffect(() => beiAppLink((url) => {
     try {
       const u = new URL(url);
-      if (u.host !== 'google' && u.pathname !== '//google') return;
+      const ziel = u.host || u.pathname.replace(/^\/+/, '');
+      if (ziel !== 'google' && ziel !== 'revenuecat') return;
       browserSchliessen();
-      googleErgebnis(u.searchParams);
+      loginErgebnis(u.searchParams);
       load();
     } catch { /* fremder Link, ignorieren */ }
-  }), [googleErgebnis, load]);
+  }), [loginErgebnis, load]);
 
   async function collect() {
     setBusy(true); setError(null);
