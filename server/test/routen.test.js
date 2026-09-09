@@ -129,3 +129,22 @@ test('/api/health nennt fehlende Schluessel und gibt nie einen Wert preis', asyn
     process.env.SESSION_SECRET = alt.s; process.env.TOKEN_ENC_KEY = alt.t;
   }
 });
+
+test('/api/health meldet Namen als ja/nein und nie einen Wert', async () => {
+  const alt = { s: process.env.SESSION_SECRET, g: process.env.GOOGLE_CLIENT_ID };
+  try {
+    const { default: health } = await import('../handlers/health.js');
+    process.env.SESSION_SECRET = 'a'.repeat(32);
+    process.env.GOOGLE_CLIENT_ID = 'streng-geheimer-client-1234';
+    const res = fakeRes();
+    await health({ method: 'GET', headers: {} }, res);
+    assert.equal(res.body.gesetzt.SESSION_SECRET, true);
+    assert.equal(res.body.gesetzt.GOOGLE_CLIENT_ID, true);
+    assert.equal(res.body.gesetzt.TELEGRAM_BOT_TOKEN, false);
+    assert.equal(res.body.laeuft.umgebung, 'lokal');
+    assert.ok(!JSON.stringify(res.body).includes('streng-geheimer'));
+  } finally {
+    process.env.SESSION_SECRET = alt.s;
+    if (alt.g === undefined) delete process.env.GOOGLE_CLIENT_ID; else process.env.GOOGLE_CLIENT_ID = alt.g;
+  }
+});
