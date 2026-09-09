@@ -24,7 +24,9 @@ Jede Quelle ist optional und wird im Tab „Einrichten" verbunden. Zwei Wege fü
 
 Die Zugangsdaten liegen AES-verschlüsselt auf dem Server, werden nie angezeigt und nur lesend genutzt.
 
-Technik: Node/Express lokal, auf Vercel als Serverless-Funktionen (`api/`), React + Vite + recharts
+Technik: Node/Express lokal, auf Vercel eine einzige Serverless-Funktion (`api/index.js`),
+die alle `/api/...`-Adressen aus `server/routen.js` bedient – der Hobby-Tarif erlaubt nur
+12 Funktionen pro Deployment. Oberfläche: React + Vite + recharts
 (`client/`). Speicher wahlweise Redis (in Vercel mit zwei Klicks dazubuchbar), eine
 Supabase-Tabelle oder lokale JSON-Dateien - je nachdem, was in der Umgebung gesetzt ist.
 Derselbe Client läuft als native App für iPhone und Android (Capacitor, `client/ios`, `client/android`).

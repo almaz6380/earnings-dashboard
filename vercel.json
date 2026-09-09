@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "client/dist",
   "framework": null,
-  "functions": { "api/collect.js": { "maxDuration": 60 } },
+  "functions": { "api/index.js": { "maxDuration": 60 } },
+  "rewrites": [{ "source": "/api/:pfad*", "destination": "/api/index?pfad=:pfad*" }],
   "crons": [{ "path": "/api/collect", "schedule": "0 6 * * *" }]
 }
