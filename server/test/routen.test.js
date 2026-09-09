@@ -93,3 +93,39 @@ test('sicher: eine normale Antwort geht unveraendert durch', async () => {
   await sicher(async (_req, r) => r.status(204).json(null), '/api/x')({}, res);
   assert.equal(res.code, 204);
 });
+
+test('/api/health nennt fehlende Schluessel und gibt nie einen Wert preis', async () => {
+  const alt = { s: process.env.SESSION_SECRET, t: process.env.TOKEN_ENC_KEY };
+  const fehler = console.error;
+  console.error = () => {};
+  try {
+    const { default: health } = await import('../handlers/health.js');
+
+    // Alles gesetzt: bereit, nichts fehlt.
+    process.env.SESSION_SECRET = 'a'.repeat(32);
+    process.env.TOKEN_ENC_KEY = 'b'.repeat(32);
+    let res = fakeRes();
+    await health({ method: 'GET', headers: {} }, res);
+    assert.equal(res.code, 200);
+    assert.equal(res.body.bereit, true);
+    assert.deepEqual(res.body.fehlt, []);
+
+    // Fehlt einer: 503 und der Name steht drin - der Wert nirgends.
+    delete process.env.SESSION_SECRET;
+    process.env.TOKEN_ENC_KEY = 'geheimer-wert-1234567890';
+    res = fakeRes();
+    await health({ method: 'GET', headers: {} }, res);
+    assert.equal(res.code, 503);
+    assert.deepEqual(res.body.fehlt, ['SESSION_SECRET']);
+    assert.ok(!JSON.stringify(res.body).includes('geheimer-wert'));
+
+    // Zu kurz zaehlt wie fehlend - genau wie in auth.js und crypto.js.
+    process.env.SESSION_SECRET = 'kurz';
+    res = fakeRes();
+    await health({ method: 'GET', headers: {} }, res);
+    assert.deepEqual(res.body.fehlt, ['SESSION_SECRET']);
+  } finally {
+    console.error = fehler;
+    process.env.SESSION_SECRET = alt.s; process.env.TOKEN_ENC_KEY = alt.t;
+  }
+});

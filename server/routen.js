@@ -1,6 +1,7 @@
 // Alle API-Adressen an einer Stelle. Der lokale Express-Server (server/index.js)
 // und die eine Vercel-Funktion (api/index.js) lesen beide aus dieser Tabelle,
 // damit lokal und in der Cloud nie unterschiedliche Wege existieren.
+import health from './handlers/health.js';
 import state from './handlers/state.js';
 import status from './handlers/status.js';
 import collect from './handlers/collect.js';
@@ -40,6 +41,7 @@ export function sicher(handler, pfad) {
 }
 
 const ROH = {
+  '/api/health': health,
   '/api/state': state,
   '/api/status': status,
   '/api/collect': collect,
