@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 process.env.SESSION_SECRET = 'test-secret-mindestens-16-zeichen';
 process.env.TOKEN_ENC_KEY = 'test-enc-key-mindestens-16-zeichen';
 
-const { ROUTEN, finde, normalisiere } = await import('../routen.js');
+const { ROUTEN, finde, normalisiere, sicher } = await import('../routen.js');
 const { pfadKandidaten } = await import('../../api/index.js');
 
 const wurzel = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -54,4 +54,42 @@ test('vercel.json leitet alle /api-Adressen auf die eine Funktion', () => {
   assert.deepEqual(cfg.rewrites, [{ source: '/api/:pfad*', destination: '/api/index?pfad=:pfad*' }]);
   assert.ok(cfg.functions['api/index.js'], 'maxDuration muss an api/index.js hängen');
   assert.ok(finde(cfg.crons[0].path), 'der Cron-Pfad muss eine bekannte Route sein');
+});
+
+function fakeRes() {
+  const r = { code: 0, body: null, headersSent: false, writableEnded: false, headers: {} };
+  r.setHeader = (k, v) => { r.headers[k] = v; };
+  r.status = (c) => { r.code = c; return r; };
+  r.json = (b) => { r.body = b; r.headersSent = true; return r; };
+  return r;
+}
+
+test('sicher: ein Speicherfehler wird zu einer lesbaren 500 statt zum Absturz', async () => {
+  const fehler = console.error;
+  console.error = () => {};
+  try {
+    const res = fakeRes();
+    await sicher(async () => { throw new Error('Redis GET: 401 Unauthorized'); }, '/api/login')({}, res);
+    assert.equal(res.code, 500);
+    assert.match(res.body.fehler, /Speicher/);
+    // Die Rohmeldung darf nicht nach draussen: sie kann Teile der Antwort des Anbieters enthalten.
+    assert.doesNotMatch(res.body.fehler, /Redis|401|Unauthorized/);
+  } finally { console.error = fehler; }
+});
+
+test('sicher: nach begonnener Antwort wird nichts mehr angehaengt', async () => {
+  const fehler = console.error;
+  console.error = () => {};
+  try {
+    const res = fakeRes();
+    await sicher(async (_req, r) => { r.status(200).json({ ok: true }); throw new Error('zu spaet'); }, '/api/test')({}, res);
+    assert.equal(res.code, 200);
+    assert.deepEqual(res.body, { ok: true });
+  } finally { console.error = fehler; }
+});
+
+test('sicher: eine normale Antwort geht unveraendert durch', async () => {
+  const res = fakeRes();
+  await sicher(async (_req, r) => r.status(204).json(null), '/api/x')({}, res);
+  assert.equal(res.code, 204);
 });

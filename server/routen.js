@@ -21,7 +21,25 @@ import revenuecatStart from './handlers/revenuecatStart.js';
 import revenuecatCallback from './handlers/revenuecatCallback.js';
 import revenuecatDisconnect from './handlers/revenuecatDisconnect.js';
 
-export const ROUTEN = {
+// Kein Handler faengt Speicherfehler ab. Ohne Netz darunter beendet ein Fehler
+// die ganze Funktion, und der Nutzer sieht nur "HTTP 500" - ohne Hinweis, dass
+// die Datenbank haengt und nicht sein Passwort falsch ist.
+export function sicher(handler, pfad) {
+  return async (req, res) => {
+    try {
+      return await handler(req, res);
+    } catch (e) {
+      console.error(`Fehler in ${pfad}:`, e);
+      if (res.headersSent || res.writableEnded) return undefined;
+      // Die Meldung selbst bleibt draussen: sie kann Teile der Antwort des
+      // Speicheranbieters enthalten. Sie steht im Server-Log.
+      res.setHeader('cache-control', 'no-store');
+      return res.status(500).json({ fehler: 'Der Server kann gerade nicht auf seinen Speicher zugreifen. Bitte in ein paar Minuten erneut versuchen.' });
+    }
+  };
+}
+
+const ROH = {
   '/api/state': state,
   '/api/status': status,
   '/api/collect': collect,
@@ -42,6 +60,10 @@ export const ROUTEN = {
   '/api/revenuecat/callback': revenuecatCallback,
   '/api/revenuecat/disconnect': revenuecatDisconnect,
 };
+
+export const ROUTEN = Object.fromEntries(
+  Object.entries(ROH).map(([pfad, handler]) => [pfad, sicher(handler, pfad)])
+);
 
 // Doppelte Schrägstriche und ein Schrägstrich am Ende sollen nicht zu 404 führen.
 export function normalisiere(pfad) {
