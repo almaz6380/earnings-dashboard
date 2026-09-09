@@ -66,10 +66,15 @@ Danach **Deployments → Redeploy.** Umgebungsvariablen greifen erst nach einem 
 
 ## 4. Prüfen
 
-`https://<adresse>` öffnen. Es muss die Anmeldemaske kommen. Leg dir dort ein Konto an
-und schau unter **Konto** nach: bei „Speicher" muss `redis` stehen (oder `supabase`).
-Steht dort `lokal (data/)`, hat der Server die Zugangsdaten nicht gesehen – dann fehlt
-ein Redeploy oder eine Variable.
+`https://<adresse>` öffnen. Es muss die Anmeldemaske kommen. Leg dir dort ein Konto an.
+
+Dass die Registrierung klappt, ist schon der halbe Beweis: Vercels Dateisystem ist
+schreibgeschützt, ohne Datenbank käme hier ein Fehler.
+
+Welche Datenbank es geworden ist, sagt dir – im selben Browser, angemeldet –
+`https://<adresse>/api/status`. Suche darin `"storage"`: dort muss `redis` stehen
+(oder `supabase`). Steht dort `lokal (data/)`, hat der Server die Zugangsdaten nicht
+gesehen – dann fehlt ein Redeploy oder eine Variable.
 
 ## 5. Google-Login einrichten (15 Minuten + Wartezeit)
 
@@ -117,7 +122,7 @@ ntfy braucht nichts vom Betreiber – Nutzer tragen ihr Topic selbst im Konto ei
 
 - `https://<adresse>` zeigt die Anmeldung ✓
 - Konto anlegen klappt ✓
-- Unter „Konto" steht bei Speicher `redis` oder `supabase` ✓
+- `https://<adresse>/api/status` zeigt bei `"storage"` `redis` oder `supabase` ✓
 - Unter „Einrichten" eine Quelle verbinden, es kommt „Verbindung steht" ✓
 - `https://<adresse>/datenschutz.html` ist erreichbar ✓
 - Am nächsten Morgen stehen neue Zahlen da (der Cron läuft um 06:00 UTC) ✓
