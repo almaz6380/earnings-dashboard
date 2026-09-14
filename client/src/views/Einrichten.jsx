@@ -23,11 +23,18 @@ function KonsoleLink({ konsole }) {
 }
 
 // Formular für einen Eintrag: Zugangsdaten, Kontosuche, Speichern mit Probeabruf.
-function EintragForm({ q, eintrag, google, onFertig, onAbbruch }) {
+function EintragForm({ q, eintrag, google, rc, onFertig, onAbbruch }) {
   const neu = !eintrag;
   const [form, setForm] = useState(() => ({
     google: eintrag?.google || (q.google ? google.verbindungen[0]?.id || '' : undefined),
     label: eintrag?.label || '',
+    // Muss aus dem Eintrag kommen: sonst zeigt das Haekchen "aus", waehrend im
+    // Eintrag oauth:true steht - und weil der Server nur uebernimmt, was im
+    // Formular steht, liesse sich das nie wieder abstellen.
+    // Kann der Server den Login gar nicht, faengt der Eintrag hier wieder auf
+    // den Schluessel zurueck; sonst bliebe er dauerhaft auf einem Weg stehen,
+    // den es auf diesem Server nicht gibt.
+    oauth: !!(eintrag?.oauth && q.loginMoeglich && rc?.verfuegbar),
   }));
   const [kandidaten, setKandidaten] = useState(null);
   const [sucht, setSucht] = useState(false);
@@ -96,7 +103,7 @@ function EintragForm({ q, eintrag, google, onFertig, onAbbruch }) {
         </label>
       )}
 
-      {q.loginMoeglich && (
+      {q.loginMoeglich && rc?.verfuegbar && (
         <label className="haken">
           <input type="checkbox" checked={!!form.oauth} onChange={(e) => { setForm({ ...form, oauth: e.target.checked }); setKandidaten(null); }} />
           <span>Über den RevenueCat-Login statt über einen Schlüssel</span>
@@ -177,7 +184,7 @@ function EintragForm({ q, eintrag, google, onFertig, onAbbruch }) {
   );
 }
 
-function Quelle({ q, google, live, onGeaendert, onCollect, busy }) {
+function Quelle({ q, google, rc, live, onGeaendert, onCollect, busy }) {
   const [offen, setOffen] = useState(null); // null | 'neu' | Eintrags-ID
   const [err, setErr] = useState(null);
   const marke = !q.configured ? ['aus', 'nicht eingerichtet']
@@ -222,7 +229,7 @@ function Quelle({ q, google, live, onGeaendert, onCollect, busy }) {
               </button>
               <button type="button" className="link klein loeschen" onClick={() => entfernen(e)}>Entfernen</button>
               {offen === e.id && (
-                <EintragForm q={q} eintrag={e} google={google}
+                <EintragForm q={q} eintrag={e} google={google} rc={rc}
                   onFertig={onGeaendert} onAbbruch={() => setOffen(null)} />
               )}
             </div>
@@ -231,7 +238,7 @@ function Quelle({ q, google, live, onGeaendert, onCollect, busy }) {
       )}
 
       {offen === 'neu'
-        ? <EintragForm q={q} google={google} onFertig={onGeaendert} onAbbruch={() => setOffen(null)} />
+        ? <EintragForm q={q} google={google} rc={rc} onFertig={onGeaendert} onAbbruch={() => setOffen(null)} />
         : (
           <div className="btnzeile" style={{ marginTop: 12 }}>
             <button type="button" className={`btn klein${q.eintraege.length ? '' : ' primaer'}`}
@@ -355,7 +362,7 @@ export default function Einrichten({ s, status, onChanged, onCollect, busy }) {
       <div className="abschnitt">Quellen <span className="zusatz">{cfg.quellen.filter((q) => q.configured).length} von {cfg.quellen.length} eingerichtet</span></div>
       <div className="raster zwei">
         {cfg.quellen.map((q) => (
-          <Quelle key={q.id} q={q} google={g} live={s.bySource[q.id]} onGeaendert={geaendert} onCollect={onCollect} busy={busy} />
+          <Quelle key={q.id} q={q} google={g} rc={rc} live={s.bySource[q.id]} onGeaendert={geaendert} onCollect={onCollect} busy={busy} />
         ))}
       </div>
 
