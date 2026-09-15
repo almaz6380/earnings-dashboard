@@ -61,6 +61,14 @@ In Vercel unter **Settings → Environment Variables** eintragen:
 
 `TOKEN_ENC_KEY` verschlüsselt die Zugangsdaten deiner Nutzer. Änderst du ihn später,
 müssen alle ihre Schlüssel neu eintragen. Also einmal erzeugen und sicher aufbewahren.
+Vercel gibt ihn nie wieder heraus, und ein gelöschtes Projekt nimmt ihn mit.
+
+`CRON_SECRET` darf **nur ASCII** enthalten, also keine Umlaute und kein ß. Vercel schickt
+den Wert beim Cron-Aufruf als HTTP-Header mit, und ein Umlaut darin lässt schon den Build
+scheitern: „contains characters that are not valid in HTTP headers". Die Ausgabe von
+`openssl rand -hex` erfüllt das von selbst. Wer sich stattdessen einen Satz ausdenkt, muss
+darauf achten. Für `SESSION_SECRET` und `TOKEN_ENC_KEY` gilt die Einschränkung nicht, die
+gehen durch keinen Header.
 
 Danach **Deployments → Redeploy.** Umgebungsvariablen greifen erst nach einem neuen Deploy.
 
@@ -83,12 +91,26 @@ laufen ohne.
 
 1. [Google Cloud Console](https://console.cloud.google.com) → neues Projekt.
 2. **APIs & Dienste → Bibliothek**: AdMob API, AdSense Management API und Cloud Storage JSON API aktivieren.
-3. **OAuth-Zustimmungsbildschirm**: Typ *Extern*, App-Name „Einnahmen", Support-E-Mail,
-   Startseite `https://<adresse>`, Datenschutz `https://<adresse>/datenschutz.html`.
+   Alle drei, auch wenn du Google Play nicht nutzt: die App fragt den Berechtigungsumfang
+   immer komplett ab, und eine abgeschaltete API lässt Google die Anmeldung mit
+   `invalid_scope` abweisen. Wer die AdSense-API vergisst, merkt es erst später an einem
+   403 beim Abruf, mit genau diesem Hinweis im Text.
+3. **OAuth-Zustimmungsbildschirm** (neuerdings „Google Auth Platform", direkt unter
+   `console.cloud.google.com/auth/overview`): Typ *Extern*, App-Name „Einnahmen",
+   Support-E-Mail, Startseite `https://<adresse>`,
+   Datenschutz `https://<adresse>/datenschutz.html`,
+   Nutzungsbedingungen `https://<adresse>/nutzungsbedingungen.html`.
+   Ohne alle drei Links bleibt **App veröffentlichen** ausgegraut.
 4. **Anmeldedaten → OAuth-Client-ID → Webanwendung.**
    Autorisierte Weiterleitungs-URI: `https://<adresse>/api/google/callback`
 5. Client-ID und Secret als `GOOGLE_CLIENT_ID` und `GOOGLE_CLIENT_SECRET` in Vercel eintragen, neu deployen.
+   Den Clientschlüssel zeigt Google **nur einmal**, bei der Erstellung. Ist er weg, legst du
+   auf der Client-Seite über **Add secret** einen neuen an; der alte bleibt daneben gültig,
+   bis du ihn deaktivierst. Kommt beim Verbinden „The provided client secret is invalid",
+   hat der Zustimmungsbildschirm ja funktioniert - dann stimmt die Client-ID und nur der
+   Schlüssel ist falsch.
 6. Im Zustimmungsbildschirm auf **In production** stellen und die **Verifizierung beantragen**.
+   Im Status *Test* verfällt die Verbindung nach sieben Tagen und muss neu hergestellt werden.
 
 Zur Verifizierung: Die drei Berechtigungen gelten bei Google als sensibel. Bis zur Freigabe
 können sich nur bis zu 100 Konten verbinden, die du selbst als Testnutzer einträgst.
@@ -126,5 +148,30 @@ ntfy braucht nichts vom Betreiber – Nutzer tragen ihr Topic selbst im Konto ei
 - Unter „Einrichten" eine Quelle verbinden, es kommt „Verbindung steht" ✓
 - `https://<adresse>/datenschutz.html` ist erreichbar ✓
 - Am nächsten Morgen stehen neue Zahlen da (der Cron läuft um 06:00 UTC) ✓
+
+## Wenn etwas klemmt
+
+**`/api/health`** beantwortet ohne Anmeldung die Frage „was fehlt dem Server noch". Sie
+nennt je bekannter Variable ja/nein, ob der Speicher antwortet, und welcher Commit gerade
+ausgeliefert wird. Nur Namen, nie Werte. Der letzte Punkt ist mehr wert, als er klingt:
+Eine Variable steht im Dashboard und fehlt trotzdem im laufenden Server, wenn seit ihrem
+Eintragen kein Deploy lief.
+
+**404 `DEPLOYMENT_NOT_FOUND`** kommt von Vercel, nicht von der App. Unter der geöffneten
+Adresse gibt es kein Deployment. Meist ist es eine alte Adresse mit Zufallskette
+(`…-abc123-name.vercel.app`), die zu einem einzelnen, inzwischen gelöschten Deployment
+gehört. Nimm die feste Adresse aus **Settings → Domains** und tausche Lesezeichen und
+Homescreen-Symbol aus.
+
+**Projekt in Vercel gelöscht?** Die Umgebungsvariablen sind endgültig weg, es gibt keinen
+Papierkorb. Der Redis-Store überlebt: er hängt am Konto, nicht am Projekt, und lässt sich
+im neuen Projekt über **Storage → Connect Store** wieder anbinden. Konten und Verlauf
+stehen dann wieder da. Nur wer `TOKEN_ENC_KEY` nicht gesichert hat, muss die Zugangsdaten
+aller Quellen einmal neu eintragen - die Konten selbst bleiben.
+
+**Homescreen-Symbol zeigt nach dem Ziehen einen schwarzen Bildschirm?** Es zeigt noch auf
+eine alte Adresse. Solange die App im Speicher läuft, fällt das nicht auf; beim ersten
+Neuladen landet sie im Leeren. Symbol entfernen, die feste Adresse in Safari öffnen und
+über **Teilen → Zum Home-Bildschirm** neu anlegen.
 
 Danach geht es mit [APP-STORE.md](APP-STORE.md) weiter: App bauen, testen, einreichen.
