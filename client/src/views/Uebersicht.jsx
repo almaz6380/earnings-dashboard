@@ -143,7 +143,7 @@ export default function Uebersicht({ s, onEinrichten }) {
         <Kachel label="Vormonat" wert={s.kpis.lastMonth} cur={cur} fuss="ganzer Monat" />
       </div>
       <p className="hinweis klein" style={{ marginTop: -4 }}>
-        Alle Zeiträume enden am letzten gemeldeten Tag{s.lastDayDate ? ` (${fmtDay(s.lastDayDate)})` : ''}. Quellen melden mit 1–2 Tagen Verzug.
+        Alle Zeiträume enden am letzten abgeschlossenen Tag{s.lastDayDate ? ` (${fmtDay(s.lastDayDate)})` : ''}. Der laufende Tag bleibt draußen und steht oben für sich. Quellen melden mit 1–2 Tagen Verzug.
       </p>
 
       {s.unconverted?.length > 0 && (

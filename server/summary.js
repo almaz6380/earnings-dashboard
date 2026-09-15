@@ -55,7 +55,12 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
   // Ein gemeldeter Null-Tag hat einen Eintrag, ein nicht gemeldeter Tag gar keinen.
   // Daraus lässt sich ablesen, bis wann eine Quelle überhaupt geliefert hat -
   // sonst ist "0,00 €" nicht von "noch keine Meldung" zu unterscheiden.
-  const letzterGemeldeter = (id) => Object.keys(history.daily?.[id] || {}).filter((d) => d <= today).sort().at(-1) || null;
+  //
+  // Der laufende Tag bleibt dabei aussen vor, auch wenn eine Quelle ihn schon mit einer
+  // Teilsumme belegt. Sonst wandert die Vergleichsbasis mitten am Tag auf heute, und
+  // ein paar Stunden Umsatz stuenden neben vollen Tagen - das sah jeden Vormittag nach
+  // Einbruch aus. Heute wird stattdessen als eigene Kachel gezeigt, als das, was es ist.
+  const letzterGemeldeter = (id) => Object.keys(history.daily?.[id] || {}).filter((d) => d < today).sort().at(-1) || null;
 
   const bySource = {};
   const lastBalanceDate = Object.keys(history.balances || {}).sort().at(-1);
