@@ -21,9 +21,9 @@ export function Delta({ wert, gross, fuss }) {
 }
 
 // Kennzahl-Kachel: Label, Wert, optional Veränderung und eine Fußzeile, die den Vergleich benennt.
-export function Kachel({ label, wert, cur, delta, fuss, titel, stellen = 2 }) {
+export function Kachel({ label, wert, cur, delta, fuss, titel, stellen = 2, klasse }) {
   return (
-    <div className="kachel" title={titel}>
+    <div className={`kachel${klasse ? ` ${klasse}` : ''}`} title={titel}>
       <div className="label">{label}</div>
       <div className="wert">{typeof wert === 'number' ? fmtMoney(wert, cur, stellen) : wert}</div>
       <div className="fuss">

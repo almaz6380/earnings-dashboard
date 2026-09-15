@@ -245,6 +245,36 @@ test('Letzter gemeldeter Tag: gemeldete Null ist nicht dasselbe wie keine Meldun
   assert.deepEqual(s.lastDayFehlend, ['AdMob']);
 });
 
+test('Der laufende Tag wird getrennt ausgewiesen, mit wem er belegt ist', () => {
+  const h = emptyHistory();
+  mergeSource(h, 'admob', { daily: [
+    { date: '2026-09-02', amount: 4, currency: 'EUR' },
+    { date: '2026-09-03', amount: 0.75, currency: 'EUR' },
+  ] }, '2026-09-03');
+  // AdSense hat fuer heute noch nichts geliefert.
+  mergeSource(h, 'adsense', { daily: [{ date: '2026-09-02', amount: 1, currency: 'EUR' }] }, '2026-09-03');
+  const s = buildSummary(h, FX, null, new Date('2026-09-03T12:00:00Z'));
+
+  assert.equal(s.todayDate, '2026-09-03');
+  assert.equal(s.kpis.today, 0.75);
+  // Die Anzeige muss sagen koennen, dass die Teilsumme nur von einer Quelle stammt.
+  assert.deepEqual(s.todaySources, ['AdMob']);
+  assert.deepEqual(s.todayFehlend, ['AdSense']);
+  // Festgehalten, weil es ueberrascht: hat eine Quelle fuer heute schon eine Teilsumme
+  // gemeldet, ist heute auch der "letzte gemeldete Tag". Die Heute-Kachel zeigt dann
+  // denselben Tag wie der Hero, benennt ihn aber als unvollstaendig.
+  assert.equal(s.lastDayDate, '2026-09-03');
+});
+
+test('Ohne Meldung fuer heute bleibt die Liste leer statt null zu behaupten', () => {
+  const h = emptyHistory();
+  mergeSource(h, 'admob', { daily: [{ date: '2026-09-02', amount: 4, currency: 'EUR' }] }, '2026-09-03');
+  const s = buildSummary(h, FX, null, new Date('2026-09-03T12:00:00Z'));
+  assert.equal(s.kpis.today, 0);
+  assert.deepEqual(s.todaySources, []);
+  assert.deepEqual(s.todayFehlend, ['AdMob']);
+});
+
 test('Ohne jede Meldung bleibt der letzte Tag leer', () => {
   const s = buildSummary(emptyHistory(), FX, null, new Date('2026-09-03T12:00:00Z'));
   assert.equal(s.lastDayDate, null);

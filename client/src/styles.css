@@ -161,6 +161,10 @@ nav.tabs button.active { background: var(--karte3); color: var(--ink); }
 /* align-items: start, damit ein aufgeklapptes Formular nicht die Nachbarkarten mitstreckt. */
 .raster.zwei { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items: start; }
 .raster.kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+/* Heute steht ueber den Vergleichsfenstern und nicht zwischen ihnen: es ist ein
+   unfertiger Wert und soll nicht wie eine der vier abgeschlossenen Zahlen wirken. */
+.raster.kpi .kachel.heute { grid-column: 1 / -1; border-style: dashed; }
+.raster.kpi .kachel.heute .wert { color: var(--ink2); }
 @media (min-width: 720px) { .raster.kpi { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .raster.quellen { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 

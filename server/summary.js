@@ -95,6 +95,13 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
   const lastDaySources = mitTageswerten.filter((id) => eurDaily[id]?.[lastDayDate] != null).map((id) => meta[id].label);
   const lastDayFehlend = mitTageswerten.filter((id) => eurDaily[id]?.[lastDayDate] == null).map((id) => meta[id].label);
 
+  // Der laufende Tag zaehlt in keinem Vergleichsfenster mit: AdMob und AdSense melden
+  // ihn als Teilsumme und korrigieren sie bis zum Folgetag. Er wird nur separat gezeigt,
+  // und dafuer muss die Anzeige wissen, wer ueberhaupt schon geliefert hat - sonst ist
+  // "0,00" nicht von "noch nichts gemeldet" zu unterscheiden.
+  const todaySources = mitTageswerten.filter((id) => eurDaily[id]?.[today] != null).map((id) => meta[id].label);
+  const todayFehlend = mitTageswerten.filter((id) => eurDaily[id]?.[today] == null).map((id) => meta[id].label);
+
   // Tagesreihe (90 Tage) und Monatsreihe (12 Monate) über alle Quellen mit Tageswerten
   const dailyIds = Object.keys(eurDaily).filter((id) => Object.keys(eurDaily[id]).length);
   const series = [];
@@ -189,6 +196,9 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     lastDayDate,
     lastDaySources,
     lastDayFehlend,
+    todayDate: today,
+    todaySources,
+    todayFehlend,
     bySource,
     apps,
     series,

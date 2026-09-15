@@ -78,6 +78,16 @@ export default function Uebersicht({ s, onEinrichten }) {
   // Fehlt an diesem Tag noch eine Quelle, wäre jeder Vergleich ein Vergleich von
   // Unvollständigem mit Vollständigem - dann lieber gar keine Veränderung zeigen.
   const tagVollstaendig = !s.lastDayFehlend?.length;
+  // Heute laeuft noch. Der Wert bekommt deshalb keine Veraenderung und keinen Vergleich,
+  // sondern nur die Angabe, wer bereits gemeldet hat. Hat noch niemand geliefert, ist
+  // ein Strich ehrlicher als eine Null - die waere von "verdient nichts" nicht zu
+  // unterscheiden.
+  const heuteGemeldet = !!s.todaySources?.length;
+  const heuteFuss = !heuteGemeldet
+    ? 'noch keine Meldung'
+    : s.todayFehlend?.length
+      ? `bisher nur ${s.todaySources.join(' und ')}`
+      : 'läuft noch, unvollständig';
   const heroDelta = tagVollstaendig ? anteil(s.kpis.lastDay, schnittDavor(reihe, 7)) : null;
   const trend = reihe.slice(-30);
 
@@ -124,6 +134,9 @@ export default function Uebersicht({ s, onEinrichten }) {
       </div>
 
       <div className="raster kpi">
+        <Kachel label={s.todayDate ? `Heute · ${fmtDay(s.todayDate).slice(0, 6)}` : 'Heute'} klasse="heute"
+          wert={heuteGemeldet ? s.kpis.today : '–'} cur={cur} fuss={heuteFuss}
+          titel="Der laufende Tag ist noch nicht vollständig und zählt in keinem Vergleich mit." />
         <Kachel label="7 Tage" wert={d7.jetzt} cur={cur} delta={d7.delta} fuss="ggü. 7 Tagen davor" />
         <Kachel label="30 Tage" wert={d30.jetzt} cur={cur} delta={d30.delta} fuss="ggü. 30 Tagen davor" />
         <Kachel label="Monat" wert={m.jetzt} cur={cur} delta={m.delta} fuss="ggü. Vormonat" titel="gegenüber dem gleichen Abschnitt des Vormonats" />
