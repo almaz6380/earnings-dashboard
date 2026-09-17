@@ -273,6 +273,7 @@ export default function App() {
         <footer className="fuss">
           <a href={`${basis}/datenschutz.html`} target="_blank" rel="noreferrer" onClick={rechtsKlick('datenschutz.html')}>Datenschutz</a>
           <a href={`${basis}/nutzungsbedingungen.html`} target="_blank" rel="noreferrer" onClick={rechtsKlick('nutzungsbedingungen.html')}>Nutzungsbedingungen</a>
+          <a href={`${basis}/impressum.html`} target="_blank" rel="noreferrer" onClick={rechtsKlick('impressum.html')}>Impressum</a>
         </footer>
       </div>
 

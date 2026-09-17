@@ -42,6 +42,18 @@ Ort, an dem Fehler im Client auffallen, es gibt keinen Typprüfer und kein Linti
 - **Geheimnisse gehen nie an die App zurück.** Handler geben „gesetzt" und die letzten
   Zeichen aus, mehr nicht. `/api/health` nennt Namen und ja/nein, nie Werte.
 
+## DSGVO-Nachzug (17.09.2026)
+
+Die Datenschutzerklärung (`client/public/datenschutz.html`) war gut aufgebaut, stand
+aber voller Platzhalter — „[Name des Betreibers]", „[EU-Region eintragen]" — und
+nannte Telegram und ntfy als Auftragsverarbeiter mit Art.-28-Vertrag. Beides gibt
+es nicht: Telegram (VAE) bietet keinen AVV an, ntfy.sh auch nicht. Sie sind jetzt
+als vom Nutzer gewählte **Empfänger** beschrieben (wie eine E-Mail-Adresse), mit
+Hinweis auf den fehlenden Angemessenheitsbeschluss bei Telegram. Betreiberdaten
+eingetragen, Regionen benannt (Vercel fra1, Supabase Frankfurt laut `docs/START.md`
+— **prüfen, ob das Projekt wirklich dort liegt**), neue Seite `impressum.html`
+(§ 5 ECG), Link in der Fußzeile der App.
+
 ## Sprache und Stil
 
 Bezeichner, Kommentare und Oberfläche sind deutsch, auch in neuem Code. Kommentare
