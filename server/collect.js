@@ -65,6 +65,7 @@ export async function runCollect({ user, userId, notify = true } = {}) {
   const fx = await getRates(base);
   const hKey = ukey(u.id, 'history'), lKey = ukey(u.id, 'latest');
   const history = (await loadJSON(hKey)) || emptyHistory();
+  const vorher = await loadJSON(lKey);
   history.daily ||= {}; history.payouts ||= {}; history.balances ||= {}; history.sources ||= {}; history.apps ||= {};
   const today = new Date().toISOString().slice(0, 10);
   const results = {};
@@ -108,28 +109,42 @@ export async function runCollect({ user, userId, notify = true } = {}) {
   pruneHistory(history);
   await saveJSON(hKey, history);
   const latest = { collectedAt: new Date().toISOString(), ms: Date.now() - started, fxDate: fx.date, results };
+  // Tag und Ergebnis der letzten Meldung mitnehmen, sonst vergäße jeder Lauf, dass heute schon gemeldet wurde.
+  if (vorher?.gemeldetAm) { latest.gemeldetAm = vorher.gemeldetAm; latest.notify = vorher.notify; }
   await saveJSON(lKey, latest);
 
   const summary = buildSummary(history, fx, latest);
-  if (notify) {
+  // Höchstens eine Meldung am Tag. Läuft ein externer Minuten-Cron ohne notify=0,
+  // kämen sonst 1440 Nachrichten täglich aufs Telefon.
+  if (notify && !schonGemeldet(vorher, today)) {
     try { latest.notify = await sendDaily(summary, u.settings || {}); } catch (e) { latest.notify = { error: e.message }; }
+    latest.gemeldetAm = today;
     await saveJSON(lKey, latest);
   }
   return { latest, summary };
 }
 
+export const schonGemeldet = (latest, tag) => latest?.gemeldetAm === tag;
+
 // Cron: alle Konten, die am längsten nicht dran waren zuerst, bis das Zeitbudget aufgebraucht ist.
 // Was nicht mehr passt, kommt beim nächsten Lauf dran (Vercel begrenzt die Laufzeit einer Funktion).
-export async function runCollectAll({ notify = true, budgetMs = 50_000, now = Date.now() } = {}) {
+// Konten, die jünger als minAlterMs gesammelt wurden, bleiben liegen: bei einem Minuten-Cron hat
+// sie meist gerade die offene App geholt, und zwei Läufe gleichzeitig verlieren einander Daten.
+export async function runCollectAll({ notify = true, budgetMs = 50_000, minAlterMs = 0, now = Date.now() } = {}) {
   const ids = await listUserIds();
   const konten = [];
   for (const id of ids) {
     const latest = await loadJSON(ukey(id, 'latest'));
-    konten.push({ id, last: latest?.collectedAt ? Date.parse(latest.collectedAt) : 0 });
+    konten.push({ id, latest, last: latest?.collectedAt ? Date.parse(latest.collectedAt) : 0 });
   }
   konten.sort((a, b) => a.last - b.last);
-  const out = { konten: konten.length, gelaufen: 0, fehler: 0, offen: 0, ms: 0 };
+  const out = { konten: konten.length, gelaufen: 0, fehler: 0, offen: 0, frisch: 0, ms: 0 };
+  const heute = new Date(now).toISOString().slice(0, 10);
   for (const k of konten) {
+    // Wer heute noch eine Meldung bekommt, läuft trotzdem, sonst fiele sie aus, nur weil
+    // die App kurz vor dem Morgen-Cron gesammelt hat.
+    const meldetNoch = notify && !schonGemeldet(k.latest, heute);
+    if (now - k.last < minAlterMs && !meldetNoch) { out.frisch++; continue; }
     if (Date.now() - now > budgetMs) { out.offen++; continue; }
     try { await runCollect({ userId: k.id, notify }); out.gelaufen++; }
     catch (e) { out.fehler++; console.error(`Sammellauf ${k.id}: ${e.message}`); }

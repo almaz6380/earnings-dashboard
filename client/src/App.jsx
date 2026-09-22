@@ -21,10 +21,10 @@ const TABS = [
 ];
 
 // So alt dürfen die Zahlen werden, solange die App offen ist, dann holt sie still neue.
-// Kürzer bringt wenig: die meisten Quellen melden ohnehin nur tageweise, und jeder Lauf
-// fragt alle eingerichteten Dienste ab.
-const AUTO_MS = 15 * 60 * 1000;
-const PRUEF_MS = 60 * 1000;
+// Bei geschlossener App übernimmt das ein externer Minuten-Cron (docs/START.md), dessen
+// Ergebnis die App nur noch lädt, statt selbst ein zweites Mal zu sammeln.
+const AUTO_MS = 60 * 1000;
+const PRUEF_MS = 20 * 1000;
 
 const veraltet = (s) => !s?.collectedAt || Date.now() - Date.parse(s.collectedAt) >= AUTO_MS;
 
@@ -226,17 +226,21 @@ export default function App() {
     load().then((s) => { if (s && veraltet(s)) collect({ auto: true }); });
   }, [authed, load, collect]);
 
-  // Automatisch aktualisieren: minütlich prüfen, ob die Zahlen älter als AUTO_MS sind,
-  // und beim Zurückkommen in App oder Tab sofort. Im Hintergrund ruht alles, sonst
-  // liefe auf dem Telefon ein Abruf nach dem anderen, den niemand ansieht.
+  // Automatisch aktualisieren: alle PRUEF_MS nachsehen, ob die Zahlen älter als AUTO_MS
+  // sind, und beim Zurückkommen in App oder Tab sofort. Veraltet heißt zuerst nur: den
+  // Serverstand holen. Erst wenn auch der alt ist, sammelt die App selbst. Im Hintergrund
+  // ruht sie; dann ist der Cron auf dem Server zuständig.
   useEffect(() => {
     if (!authed) return undefined;
     let zuletzt = 0;
-    const pruefe = ({ rueckkehr = false } = {}) => {
-      if (document.hidden || navigator.onLine === false) return;
-      if (veraltet(stateRef.current)) { collect({ auto: true }); return; }
-      // App-Rückkehr und visibilitychange kommen auf dem Telefon beide - einmal laden reicht.
-      if (rueckkehr && Date.now() - zuletzt > 2000) { zuletzt = Date.now(); load(); }
+    const pruefe = async ({ rueckkehr = false } = {}) => {
+      if (document.hidden || navigator.onLine === false || laeuft.current) return;
+      // App-Rückkehr und visibilitychange kommen auf dem Telefon beide - einmal reicht.
+      if (Date.now() - zuletzt < 2000) return;
+      if (!rueckkehr && !veraltet(stateRef.current)) return;
+      zuletzt = Date.now();
+      const s = await load();
+      if (s && veraltet(s)) collect({ auto: true });
     };
     const zurueck = () => pruefe({ rueckkehr: true });
     const t = setInterval(pruefe, PRUEF_MS);
