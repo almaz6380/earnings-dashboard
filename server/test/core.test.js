@@ -476,3 +476,10 @@ test('Redis-Speicher: schreiben, lesen, nach Präfix auflisten, löschen', async
   }
   assert.equal(speicher.useRedis(), false, 'nach dem Test wieder der lokale Speicher');
 });
+
+test('Meldung höchstens einmal am Tag', async () => {
+  const { schonGemeldet } = await import('../collect.js');
+  assert.equal(schonGemeldet(null, '2026-09-22'), false);
+  assert.equal(schonGemeldet({ gemeldetAm: '2026-09-21' }, '2026-09-22'), false);
+  assert.equal(schonGemeldet({ gemeldetAm: '2026-09-22' }, '2026-09-22'), true);
+});

@@ -56,7 +56,9 @@ Schritt für Schritt mit allen Klickpfaden: **[docs/START.md](docs/START.md)**. 
    Der Google-OAuth-Client gehört dem Betreiber und gilt für alle Nutzer (Zustimmungsbildschirm „In production", Scopes verifizieren lassen).
 4. Deploy. Danach Env-Änderungen wirken erst nach erneutem Deploy.
 5. Cron: `vercel.json` ruft `/api/collect` täglich um 06:00 UTC auf. Vercel schickt dabei `Authorization: Bearer <CRON_SECRET>`,
-   also `CRON_SECRET` setzen. Alternativ cron-job.org auf `https://<app>/api/collect?secret=<CRON_SECRET>`.
+   also `CRON_SECRET` setzen. Öfter als täglich erlaubt der Hobby-Tarif nicht; für einen Viertelstundentakt bei
+   geschlossener App cron-job.org auf `https://<app>/api/collect?notify=0` mit `Authorization: Bearer <CRON_SECRET>`
+   (Schritt 8 in [docs/START.md](docs/START.md)). Gemeldet wird höchstens einmal am Tag.
 
 ## Native App (App Store / Google Play)
 

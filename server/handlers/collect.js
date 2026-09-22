@@ -8,7 +8,11 @@ export default withCors(async function handler(req, res) {
   try {
     if (cronOk(req)) {
       // Benachrichtigung nur beim Cron-Lauf, nicht bei jedem Klick im Dashboard
-      const out = await runCollectAll({ notify: req.query?.notify !== '0', budgetMs: +(process.env.COLLECT_BUDGET_MS || 50_000) });
+      const out = await runCollectAll({
+        notify: req.query?.notify !== '0',
+        budgetMs: +(process.env.COLLECT_BUDGET_MS || 50_000),
+        minAlterMs: +(process.env.COLLECT_MIN_ALTER_MS || 30_000),
+      });
       return res.status(200).json(out);
     }
     const u = await currentUser(req);

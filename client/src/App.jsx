@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Uebersicht from './views/Uebersicht.jsx';
 import Verlauf from './views/Verlauf.jsx';
 import Apps from './views/Apps.jsx';
@@ -19,6 +19,16 @@ const TABS = [
   { id: 'einrichten', label: 'Einrichten', icon: Icon.einrichten },
   { id: 'konto', label: 'Konto', icon: Icon.konto },
 ];
+
+// So alt dürfen die Zahlen werden, solange die App offen ist, dann holt sie still neue.
+// Bei geschlossener App übernimmt das ein externer Cron im selben Takt (docs/START.md),
+// dessen Ergebnis die App nur noch lädt, statt selbst ein zweites Mal zu sammeln.
+// Öfter lohnt nicht: jeder Lauf fragt alle Quellen ab, und die meisten melden ohnehin
+// nur tageweise.
+const AUTO_MS = 15 * 60 * 1000;
+const PRUEF_MS = 60 * 1000;
+
+const veraltet = (s) => !s?.collectedAt || Date.now() - Date.parse(s.collectedAt) >= AUTO_MS;
 
 const rechtsLink = (basis, pfad) => `${basis || (NATIV ? getServer() : '')}/${pfad}`;
 
@@ -143,17 +153,47 @@ export default function App() {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [still, setStill] = useState(false);
   const [flash, setFlash] = useState(null);
   const [resetToken] = useState(() => new URLSearchParams(location.search).get('reset'));
+
+  const stateRef = useRef(null);
+  const laeuft = useRef(false);
+
+  const abgemeldet = useCallback(() => { setAuthed(false); if (NATIV) setToken(null); }, []);
 
   const load = useCallback(async () => {
     try {
       const [s, st] = await Promise.all([api('/api/state'), api('/api/status')]);
+      stateRef.current = s;
       setState(s); setStatus(st); setError(null);
+      return s;
     } catch (e) {
-      if (e.status === 401) { setAuthed(false); if (NATIV) setToken(null); } else setError(e.message);
+      if (e.status === 401) abgemeldet(); else setError(e.message);
+      return null;
     }
-  }, []);
+  }, [abgemeldet]);
+
+  // Nie zwei Läufe gleichzeitig: beide würden den Verlauf laden, mischen und speichern,
+  // und der spätere überschriebe den früheren. Zieht man, während ein stiller Lauf
+  // schon unterwegs ist, wird der nur sichtbar gemacht statt ein zweiter gestartet.
+  const collect = useCallback(async ({ auto = false } = {}) => {
+    if (laeuft.current) { if (!auto) setBusy(true); return; }
+    laeuft.current = true;
+    if (auto) setStill(true); else { setBusy(true); setError(null); }
+    try {
+      await api('/api/collect', { method: 'POST' });
+      await load();
+    } catch (e) {
+      if (e.status === 401) abgemeldet();
+      // Ohne Netz im Hintergrund nicht jede Viertelstunde eine rote Zeile zeigen;
+      // der nächste sichtbare Versuch meldet es dann.
+      else if (!auto || e.status !== 0) setError(e.message);
+    } finally {
+      laeuft.current = false;
+      setBusy(false); setStill(false);
+    }
+  }, [load, abgemeldet]);
 
   // Ergebnis eines Logins anzeigen (Web: ?google=…, App: einnahmen://google?…).
   const loginErgebnis = useCallback((q) => {
@@ -181,10 +221,43 @@ export default function App() {
     }
   }, [loginErgebnis]);
 
-  useEffect(() => { if (authed) load(); }, [authed, load]);
+  // Beim Öffnen erst den gespeicherten Stand zeigen, dann bei Bedarf still nachladen -
+  // sonst stünde bis zum Ende des Sammellaufs nur „Lade Daten …" da.
+  useEffect(() => {
+    if (!authed) return;
+    load().then((s) => { if (s && veraltet(s)) collect({ auto: true }); });
+  }, [authed, load, collect]);
+
+  // Automatisch aktualisieren: alle PRUEF_MS nachsehen, ob die Zahlen älter als AUTO_MS
+  // sind, und beim Zurückkommen in App oder Tab sofort. Veraltet heißt zuerst nur: den
+  // Serverstand holen. Erst wenn auch der alt ist, sammelt die App selbst. Im Hintergrund
+  // ruht sie; dann ist der Cron auf dem Server zuständig.
+  useEffect(() => {
+    if (!authed) return undefined;
+    let zuletzt = 0;
+    const pruefe = async ({ rueckkehr = false } = {}) => {
+      if (document.hidden || navigator.onLine === false || laeuft.current) return;
+      // App-Rückkehr und visibilitychange kommen auf dem Telefon beide - einmal reicht.
+      if (Date.now() - zuletzt < 2000) return;
+      if (!rueckkehr && !veraltet(stateRef.current)) return;
+      zuletzt = Date.now();
+      const s = await load();
+      if (s && veraltet(s)) collect({ auto: true });
+    };
+    const zurueck = () => pruefe({ rueckkehr: true });
+    const t = setInterval(pruefe, PRUEF_MS);
+    document.addEventListener('visibilitychange', zurueck);
+    window.addEventListener('online', zurueck);
+    const weg = beiRueckkehr(zurueck);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', zurueck);
+      window.removeEventListener('online', zurueck);
+      weg();
+    };
+  }, [authed, load, collect]);
   useEffect(() => { history.replaceState(null, '', `#${tab}`); }, [tab]);
   useEffect(() => { if (authed !== null) splashAusblenden(); }, [authed]);
-  useEffect(() => { if (!authed) return undefined; return beiRueckkehr(load); }, [authed, load]);
   useEffect(() => beiZurueck(() => {
     if (tab !== 'uebersicht') { setTab('uebersicht'); return true; }
     return false;
@@ -200,16 +273,10 @@ export default function App() {
     } catch { /* fremder Link, ignorieren */ }
   }), [loginErgebnis, load]);
 
-  async function collect() {
-    setBusy(true); setError(null);
-    try { await api('/api/collect', { method: 'POST' }); await load(); }
-    catch (e) { if (e.status === 401) { setAuthed(false); if (NATIV) setToken(null); } else setError(e.message); }
-    finally { setBusy(false); }
-  }
-
   async function logout({ still = false } = {}) {
     if (!still) await api('/api/logout', { method: 'POST' }).catch(() => {});
     if (NATIV) await setToken(null);
+    stateRef.current = null;
     setAuthed(false); setState(null); setStatus(null); setError(null); setTab('uebersicht');
   }
 
@@ -227,7 +294,7 @@ export default function App() {
   return (
     <>
       <div className="app">
-        <PullToRefresh onRefresh={collect} busy={busy} />
+        <PullToRefresh onRefresh={() => collect()} busy={busy} />
         <header className="top">
           <div className="marke">
             <Logo size={30} />
@@ -237,7 +304,7 @@ export default function App() {
             </div>
           </div>
           <div className="rechts">
-            <button className="btn klein" onClick={collect} disabled={busy}>{busy ? 'Rufe ab …' : 'Aktualisieren'}</button>
+            <button className="btn klein" onClick={() => collect()} disabled={busy}>{busy || still ? 'Rufe ab …' : 'Aktualisieren'}</button>
           </div>
         </header>
 
@@ -265,7 +332,7 @@ export default function App() {
             {tab === 'uebersicht' && <Uebersicht s={state} onEinrichten={() => setTab('einrichten')} />}
             {tab === 'apps' && <Apps s={state} />}
             {tab === 'verlauf' && <Verlauf s={state} />}
-            {tab === 'einrichten' && <Einrichten s={state} status={status} onChanged={load} onCollect={collect} busy={busy} />}
+            {tab === 'einrichten' && <Einrichten s={state} status={status} onChanged={load} onCollect={() => collect()} busy={busy} />}
             {tab === 'konto' && <Konto status={status} onLogout={logout} onChanged={load} />}
           </>
         )}

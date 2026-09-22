@@ -62,6 +62,13 @@ export async function api(path, opts = {}) {
     throw Object.assign(new Error(msg), { status: 0 });
   }
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error(data.fehler || `HTTP ${res.status}`), { status: res.status });
+  if (!res.ok) {
+    // Läuft der Sammellauf über die Zeitgrenze der Funktion, antwortet Vercel mit einer
+    // HTML-Seite statt JSON - ohne diesen Fall stünde nur „HTTP 504" da.
+    const msg = data.fehler || (res.status === 504
+      ? 'Der Server hat zu lange gebraucht. Gleich noch einmal versuchen; bleibt es dabei, unter Einrichten nachsehen, welche Quelle hängt.'
+      : `HTTP ${res.status}`);
+    throw Object.assign(new Error(msg), { status: res.status });
+  }
   return data;
 }
