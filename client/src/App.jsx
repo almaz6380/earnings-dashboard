@@ -21,10 +21,12 @@ const TABS = [
 ];
 
 // So alt dürfen die Zahlen werden, solange die App offen ist, dann holt sie still neue.
-// Bei geschlossener App übernimmt das ein externer Minuten-Cron (docs/START.md), dessen
-// Ergebnis die App nur noch lädt, statt selbst ein zweites Mal zu sammeln.
-const AUTO_MS = 60 * 1000;
-const PRUEF_MS = 20 * 1000;
+// Bei geschlossener App übernimmt das ein externer Cron im selben Takt (docs/START.md),
+// dessen Ergebnis die App nur noch lädt, statt selbst ein zweites Mal zu sammeln.
+// Öfter lohnt nicht: jeder Lauf fragt alle Quellen ab, und die meisten melden ohnehin
+// nur tageweise.
+const AUTO_MS = 15 * 60 * 1000;
+const PRUEF_MS = 60 * 1000;
 
 const veraltet = (s) => !s?.collectedAt || Date.now() - Date.parse(s.collectedAt) >= AUTO_MS;
 

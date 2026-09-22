@@ -32,7 +32,7 @@ Ort, an dem Fehler im Client auffallen, es gibt keinen Typprüfer und kein Linti
   Endpunkt eine Datei wären neunzehn. `vercel.json` leitet alles auf `api/index.js` um.
   Neue Endpunkte kommen nach `server/routen.js`, nicht als neue Datei in `api/`.
 - **Vercel-Cron höchstens täglich.** Der Hobby-Tarif lehnt häufigere Zeitpläne ab und das
-  Deployment scheitert. Den Minutentakt gibt cron-job.org (`docs/START.md`, Schritt 8); der
+  Deployment scheitert. Den Viertelstundentakt gibt cron-job.org (`docs/START.md`, Schritt 8); der
   Server meldet deshalb höchstens einmal am Tag und überspringt gerade gesammelte Konten.
 - **`CRON_SECRET` nur ASCII.** Vercel schickt den Wert als HTTP-Header; ein Umlaut darin
   lässt schon den Build scheitern. Für die anderen Geheimnisse gilt das nicht.

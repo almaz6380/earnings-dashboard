@@ -114,8 +114,8 @@ export async function runCollect({ user, userId, notify = true } = {}) {
   await saveJSON(lKey, latest);
 
   const summary = buildSummary(history, fx, latest);
-  // Höchstens eine Meldung am Tag. Läuft ein externer Minuten-Cron ohne notify=0,
-  // kämen sonst 1440 Nachrichten täglich aufs Telefon.
+  // Höchstens eine Meldung am Tag. Läuft der externe Viertelstunden-Cron ohne notify=0,
+  // kämen sonst 96 Nachrichten täglich aufs Telefon.
   if (notify && !schonGemeldet(vorher, today)) {
     try { latest.notify = await sendDaily(summary, u.settings || {}); } catch (e) { latest.notify = { error: e.message }; }
     latest.gemeldetAm = today;
@@ -128,7 +128,7 @@ export const schonGemeldet = (latest, tag) => latest?.gemeldetAm === tag;
 
 // Cron: alle Konten, die am längsten nicht dran waren zuerst, bis das Zeitbudget aufgebraucht ist.
 // Was nicht mehr passt, kommt beim nächsten Lauf dran (Vercel begrenzt die Laufzeit einer Funktion).
-// Konten, die jünger als minAlterMs gesammelt wurden, bleiben liegen: bei einem Minuten-Cron hat
+// Konten, die jünger als minAlterMs gesammelt wurden, bleiben liegen: beim externen Cron hat
 // sie meist gerade die offene App geholt, und zwei Läufe gleichzeitig verlieren einander Daten.
 export async function runCollectAll({ notify = true, budgetMs = 50_000, minAlterMs = 0, now = Date.now() } = {}) {
   const ids = await listUserIds();

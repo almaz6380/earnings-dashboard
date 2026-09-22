@@ -140,23 +140,23 @@ Danach kannst du die Quellen-Variablen aus der Umgebung löschen.
 
 ntfy braucht nichts vom Betreiber – Nutzer tragen ihr Topic selbst im Konto ein.
 
-## 8. Jede Minute aktualisieren, auch bei geschlossener App
+## 8. Alle 15 Minuten aktualisieren, auch bei geschlossener App
 
 Der Cron in `vercel.json` läuft einmal am Tag um 06:00 UTC und verschickt die tägliche
 Meldung. Öfter geht auf dem Hobby-Tarif nicht: Vercel lehnt dort jeden Cron ab, der
-häufiger als täglich läuft, und das Deployment scheitert. Den Minutentakt gibt deshalb
+häufiger als täglich läuft, und das Deployment scheitert. Den Viertelstundentakt gibt deshalb
 ein externer Dienst, zum Beispiel [cron-job.org](https://cron-job.org) (kostenlos):
 
 1. Konto anlegen, **Create cronjob**.
 2. URL: `https://<adresse>/api/collect?notify=0`
-3. Zeitplan: **Every minute**.
+3. Zeitplan: **Every 15 minutes**.
 4. Unter **Advanced → Headers** einen Header `Authorization` mit dem Wert
    `Bearer <CRON_SECRET>` anlegen. Geht auch als `?secret=…` in der URL, dann steht das
    Geheimnis aber in jedem Protokoll, das die Adresse mitschreibt.
-5. Methode **POST** (GET geht auch), speichern. In der Verlaufsansicht muss nach einer
-   Minute ein Aufruf mit Status 200 stehen, die Antwort nennt `gelaufen` und `frisch`.
+5. Methode **POST** (GET geht auch), speichern. In der Verlaufsansicht muss nach spätestens
+   15 Minuten ein Aufruf mit Status 200 stehen, die Antwort nennt `gelaufen` und `frisch`.
 
-`notify=0` verhindert, dass der Minuten-Cron meldet; das bleibt Sache des Vercel-Crons um
+`notify=0` verhindert, dass der Viertelstunden-Cron meldet; das bleibt Sache des Vercel-Crons um
 06:00. Fehlt es, meldet der Server trotzdem höchstens einmal am Tag, dann aber schon kurz
 nach Mitternacht UTC mit einem halben Vortag.
 
@@ -164,11 +164,12 @@ Konten, die in den letzten 30 Sekunden schon gesammelt wurden – meist von der 
 App –, überspringt der Lauf (`COLLECT_MIN_ALTER_MS`). Zwei gleichzeitige Läufe würden
 sonst denselben Verlauf laden und sich beim Speichern gegenseitig überschreiben.
 
-Was der Minutentakt kostet, im Blick behalten: jeder Lauf fragt alle eingerichteten
-Quellen ab, also 1440-mal am Tag je Konto. Vercel zählt das gegen die Funktionslaufzeit
+Was der Takt kostet, im Blick behalten: jeder Lauf fragt alle eingerichteten Quellen
+ab, also 96-mal am Tag je Konto. Öfter als alle 15 Minuten lohnt nicht: die meisten
+Quellen melden ohnehin nur tageweise. Vercel zählt das gegen die Funktionslaufzeit
 des Tarifs (Dashboard → **Usage**), und Google, Apple, PayPal und Wise haben eigene
 Abfragegrenzen. Kommen unter „Einrichten" Fehler wie „429" oder „quota", den Takt bei
-cron-job.org auf 5 oder 15 Minuten stellen.
+cron-job.org auf 30 oder 60 Minuten stellen.
 
 ## Läuft es?
 
@@ -178,7 +179,7 @@ cron-job.org auf 5 oder 15 Minuten stellen.
 - Unter „Einrichten" eine Quelle verbinden, es kommt „Verbindung steht" ✓
 - `https://<adresse>/datenschutz.html` ist erreichbar ✓
 - Am nächsten Morgen stehen neue Zahlen da (der Cron läuft um 06:00 UTC) ✓
-- Mit Minuten-Cron: „Stand" oben in der App ist nie älter als ein, zwei Minuten ✓
+- Mit dem externen Cron: „Stand" oben in der App ist nie älter als etwa 15 Minuten ✓
 
 ## Wenn etwas klemmt
 
