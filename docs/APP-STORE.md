@@ -20,7 +20,7 @@ Zugangsdaten in der App ein, und dein Server ruft für jedes Konto die Berichte 
 | Rechtstexte mit Platzhaltern | `client/public/datenschutz.html`, `nutzungsbedingungen.html` | Platzhalter füllen |
 | Store-Texte, Review-Hinweise, Datenschutz-Fragebögen | `store/listing.md` | fertig zum Kopieren |
 | Migration deines alten Ein-Nutzer-Dashboards | `node server/cli.js migrate <email> <passwort>` | fertig |
-| CI | `.github/workflows/android.yml`, `ios.yml` | Debug-APK je Push, AAB bei Tag `v*`, iOS-Kompilierprüfung |
+| CI | `.github/workflows/android.yml`, `ios.yml` | Debug-APK und AAB bei Tag `v*` oder von Hand, iOS-Kompilierprüfung |
 
 ## Was nur du machen kannst (Checkliste)
 

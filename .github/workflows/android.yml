@@ -1,5 +1,8 @@
-# Baut die Android-App. Bei jedem Push ein Debug-APK zum Ausprobieren (Artefakt),
-# bei einem Tag v* zusätzlich das signierte App-Bundle (AAB) für Google Play.
+# Baut die Android-App: ein Debug-APK zum Ausprobieren (Artefakt), bei einem Tag v*
+# zusätzlich das signierte App-Bundle (AAB) für Google Play.
+# Läuft nur bei einem Tag v* oder von Hand (Actions → Android → Run workflow). Früher
+# lief er bei jedem Push und jedem Pull Request und hat das Actions-Kontingent des
+# Kontos aufgebraucht, obwohl die meisten Änderungen die Android-App nicht betrafen.
 # Dafür in den Repository-Secrets hinterlegen:
 #   ANDROID_KEYSTORE_BASE64  (base64 -i upload.keystore | tr -d '\n')
 #   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
@@ -7,9 +10,7 @@ name: Android
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
-  pull_request:
   workflow_dispatch:
 
 jobs:
