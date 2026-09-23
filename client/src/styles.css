@@ -165,6 +165,8 @@ nav.tabs button.active { background: var(--karte3); color: var(--ink); }
    unfertiger Wert und soll nicht wie eine der vier abgeschlossenen Zahlen wirken. */
 .raster.kpi .kachel.heute { grid-column: 1 / -1; border-style: dashed; }
 .raster.kpi .kachel.heute .wert { color: var(--ink2); }
+/* Volle Breite, sonst stünde sie auf dem Telefon als halbe Kachel allein in der letzten Zeile. */
+.raster.kpi .kachel.seit { grid-column: 1 / -1; }
 @media (min-width: 720px) { .raster.kpi { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .raster.quellen { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
 
