@@ -88,7 +88,8 @@ export default function Uebersicht({ s, onEinrichten }) {
     : s.todayFehlend?.length
       ? `bisher nur ${s.todaySources.join(' und ')}`
       : 'läuft noch, unvollständig';
-  const heroDelta = tagVollstaendig ? anteil(s.kpis.lastDay, schnittDavor(reihe, 7)) : null;
+  const heroSchnitt = schnittDavor(reihe, 7);
+  const heroDelta = tagVollstaendig ? anteil(s.kpis.lastDay, heroSchnitt) : null;
   const trend = reihe.slice(-30);
 
   const verteilung = quellen
@@ -118,7 +119,7 @@ export default function Uebersicht({ s, onEinrichten }) {
             <div className="hero-label">{s.lastDayDate ? `Letzter Tag · ${fmtDay(s.lastDayDate).slice(0, 6)}` : 'Letzter Tag'}</div>
             <div className="hero-wert">{s.lastDayDate ? fmtMoney(s.kpis.lastDay, cur) : '–'}</div>
           </div>
-          {heroDelta != null && <Delta wert={heroDelta} gross fuss="gegenüber dem Durchschnitt der sieben Tage davor" />}
+          {heroDelta != null && <Delta wert={heroDelta} davor={heroSchnitt} cur={cur} gross fuss="gegenüber dem Durchschnitt der sieben Tage davor" />}
         </div>
         {!tagVollstaendig && s.lastDayDate && (
           <div className="hero-fehlt">Ohne {s.lastDayFehlend.join(' und ')} – für diesen Tag noch nicht gemeldet.</div>
@@ -137,9 +138,9 @@ export default function Uebersicht({ s, onEinrichten }) {
         <Kachel label={s.todayDate ? `Heute · ${fmtDay(s.todayDate).slice(0, 6)}` : 'Heute'} klasse="heute"
           wert={heuteGemeldet ? s.kpis.today : '–'} cur={cur} fuss={heuteFuss}
           titel="Der laufende Tag ist noch nicht vollständig und zählt in keinem Vergleich mit." />
-        <Kachel label="7 Tage" wert={d7.jetzt} cur={cur} delta={d7.delta} fuss="ggü. 7 Tagen davor" />
-        <Kachel label="30 Tage" wert={d30.jetzt} cur={cur} delta={d30.delta} fuss="ggü. 30 Tagen davor" />
-        <Kachel label="Monat" wert={m.jetzt} cur={cur} delta={m.delta} fuss="ggü. Vormonat" titel="gegenüber dem gleichen Abschnitt des Vormonats" />
+        <Kachel label="7 Tage" wert={d7.jetzt} cur={cur} delta={d7.delta} davor={d7.davor} fuss="ggü. 7 Tagen davor" />
+        <Kachel label="30 Tage" wert={d30.jetzt} cur={cur} delta={d30.delta} davor={d30.davor} fuss="ggü. 30 Tagen davor" />
+        <Kachel label="Monat" wert={m.jetzt} cur={cur} delta={m.delta} davor={m.davor} fuss="ggü. Vormonat" titel="gegenüber dem gleichen Abschnitt des Vormonats" />
         <Kachel label="Vormonat" wert={s.kpis.lastMonth} cur={cur} fuss="ganzer Monat" />
         {/* Die einzige Zahl, die bis zur nächsten Auszahlung nur wächst. Die Zeitfenster
             daneben wandern mit und bleiben bei gleichmäßigen Einnahmen gleich hoch. */}

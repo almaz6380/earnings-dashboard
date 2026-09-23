@@ -3,15 +3,16 @@ import { Icon } from './icons.jsx';
 import { fmtMoney } from './format.js';
 
 // Veränderung. Die Richtung trägt der Pfeil und das Vorzeichen, nie die Farbe allein.
-export function Delta({ wert, gross, fuss }) {
+export function Delta({ wert, gross, fuss, davor, cur }) {
   if (wert == null) return null;
   const prozent = wert * 100;
   const gerundet = Math.round(prozent);
   const richtung = gerundet > 0 ? 'hoch' : gerundet < 0 ? 'runter' : 'neutral';
   const Pfeil = richtung === 'hoch' ? Icon.hoch : richtung === 'runter' ? Icon.runter : null;
-  // Sehr kleine Vorwerte lassen den Prozentwert explodieren; ab 999 % sagt die Zahl nichts mehr.
+  // Sehr kleine Vorwerte lassen den Prozentwert explodieren; ab 999 % sagt die Zahl nichts
+  // mehr. Dann den Vorwert selbst nennen: „vorher 0,06 €" erklärt, was „+4.677 %" verschleiert.
   const text = Math.abs(gerundet) > 999
-    ? `${gerundet > 0 ? '>+' : '<−'}999 %`
+    ? (davor != null ? `vorher ${fmtMoney(davor, cur)}` : `${gerundet > 0 ? '>+' : '<−'}999 %`)
     : `${gerundet > 0 ? '+' : gerundet < 0 ? '−' : '±'}${Math.abs(gerundet)} %`;
   return (
     <span className={`delta ${richtung}${gross ? ' gross' : ''}`} title={fuss}>
@@ -21,13 +22,13 @@ export function Delta({ wert, gross, fuss }) {
 }
 
 // Kennzahl-Kachel: Label, Wert, optional Veränderung und eine Fußzeile, die den Vergleich benennt.
-export function Kachel({ label, wert, cur, delta, fuss, titel, stellen = 2, klasse }) {
+export function Kachel({ label, wert, cur, delta, davor, fuss, titel, stellen = 2, klasse }) {
   return (
     <div className={`kachel${klasse ? ` ${klasse}` : ''}`} title={titel}>
       <div className="label">{label}</div>
       <div className="wert">{typeof wert === 'number' ? fmtMoney(wert, cur, stellen) : wert}</div>
       <div className="fuss">
-        {delta != null && <Delta wert={delta} fuss={titel} />}
+        {delta != null && <Delta wert={delta} davor={davor} cur={cur} fuss={titel} />}
         <span>{fuss}</span>
       </div>
     </div>
