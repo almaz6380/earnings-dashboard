@@ -91,7 +91,7 @@ export function parseReport(res, store = {}) {
     if (app) apps.push({ id: app.value, name: app.displayLabel || app.value, date, amount, currency, ...zuStore(store, app.value) });
   }
   const daily = Object.entries(proTag).sort().map(([date, amount]) => ({ date, amount, currency }));
-  return { currency, asOf: new Date().toISOString(), daily, apps, balance: null, extra: {}, note: 'AdMob meldet mit 1–2 Tagen Verzug; Guthaben = Summe seit letzter Auszahlung.' };
+  return { currency, asOf: new Date().toISOString(), daily, apps, balance: null, extra: {}, note: 'AdMob meldet mit 1–2 Tagen Verzug. Das Guthaben führt Google gemeinsam mit AdSense.' };
 }
 
 const round2 = (x) => Math.round(x * 100) / 100;

@@ -9,6 +9,24 @@ const STORES = ['appstore', 'play'];
 // Namen gleicher Apps aus verschiedenen Quellen zusammenführen: Klein schreiben, alles außer Buchstaben/Ziffern weg.
 export const appKey = (name) => String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
 
+// Was Google seit der letzten Auszahlung schuldet: das offene Guthaben plus alles, was
+// noch nicht darin steht. Google schreibt die Einnahmen eines Monats erst in den ersten
+// Tagen des Folgemonats gut; bis dahin steht das Guthaben still, und genau das sah nach
+// „wächst seit Wochen nicht" aus. Hat sich das Guthaben in diesem Monat schon bewegt
+// (Gutschrift oder Auszahlung), reicht es bis Ende Vormonat, sonst nimmt die Rechnung
+// bis zum 8. an, dass der Vormonat noch fehlt.
+// AdMob zählt mit, weil es bei gleicher Publisher-ID dasselbe Guthaben ist.
+export function seitAuszahlung({ eurDaily, offen, verlauf, today }) {
+  const monat = today.slice(0, 7);
+  const [y, m] = monat.split('-').map(Number);
+  const vormonat = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+  const bewegt = verlauf.some(([d, v], i) => i > 0 && d.startsWith(monat) && Math.abs(v - verlauf[i - 1][1]) > 0.005);
+  const von = bewegt || Number(today.slice(8, 10)) >= 8 ? `${monat}-01` : `${vormonat}-01`;
+  const laufend = round2(ADS.reduce((a, id) => a + Object.entries(eurDaily[id] || {})
+    .filter(([d]) => d >= von && d <= today).reduce((s, [, v]) => s + v, 0), 0));
+  return { wert: round2(offen + laufend), offen: round2(offen), laufend, von };
+}
+
 export function buildSummary(history, fx, latest = null, now = new Date()) {
   const today = now.toISOString().slice(0, 10);
   const meta = Object.fromEntries(SOURCES.map((s) => [s.meta.id, s.meta]));
@@ -192,6 +210,15 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
   const accountsEur = round2(['wise', 'paypal'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
   const openEur = round2(['adsense'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
 
+  // Ohne AdSense fehlt das Guthaben, und eine Summe ab Monatsbeginn als „seit Auszahlung"
+  // auszugeben wäre geraten.
+  const verlauf = Object.keys(history.balances || {}).sort()
+    .filter((d) => history.balances[d]?.adsense?.length)
+    .map((d) => [d, history.balances[d].adsense.reduce((a, b) => a + (toBase(b.amount, b.currency, fx) ?? 0), 0)]);
+  const googleSeitAuszahlung = bySource.adsense?.status && bySource.adsense.status !== 'unconfigured'
+    ? seitAuszahlung({ eurDaily, offen: openEur, verlauf, today })
+    : null;
+
   return {
     collectedAt: latest?.collectedAt || null,
     baseCurrency: fx.base,
@@ -211,6 +238,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     payouts,
     accountsEur,
     openEur,
+    googleSeitAuszahlung,
     // Nur melden, wo tatsächlich Geld fehlt. Eine Währung mit 0 (etwa Gratis-Downloads
     // in Vietnam) als Warnung anzuzeigen, behauptet eine Lücke, die es nicht gibt.
     unconverted: [...unconverted.values()].filter((u) => u.gesamt !== 0 || u.d30 !== 0).sort((a, b) => b.gesamt - a.gesamt),

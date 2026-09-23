@@ -483,3 +483,27 @@ test('Meldung höchstens einmal am Tag', async () => {
   assert.equal(schonGemeldet({ gemeldetAm: '2026-09-21' }, '2026-09-22'), false);
   assert.equal(schonGemeldet({ gemeldetAm: '2026-09-22' }, '2026-09-22'), true);
 });
+
+test('Seit Auszahlung: Guthaben plus was Google noch nicht gutgeschrieben hat', async () => {
+  const { seitAuszahlung } = await import('../summary.js');
+  const eurDaily = {
+    admob: { '2026-08-30': 3, '2026-09-02': 2, '2026-09-20': 1 },
+    adsense: { '2026-09-05': 0.5 },
+  };
+  // Mitte des Monats: August steckt schon im Guthaben, gezählt wird ab dem 1.
+  assert.deepEqual(seitAuszahlung({ eurDaily, offen: 40, verlauf: [], today: '2026-09-23' }),
+    { wert: 43.5, offen: 40, laufend: 3.5, von: '2026-09-01' });
+  // Am 3. hat sich das Guthaben noch nicht bewegt: der August fehlt darin noch und zählt mit.
+  assert.equal(seitAuszahlung({ eurDaily, offen: 40, verlauf: [['2026-08-31', 40], ['2026-09-03', 40]], today: '2026-09-03' }).von, '2026-08-01');
+  // Hat Google am 2. gutgeschrieben, darf der August nicht doppelt zählen.
+  assert.equal(seitAuszahlung({ eurDaily, offen: 45, verlauf: [['2026-08-31', 40], ['2026-09-02', 45]], today: '2026-09-03' }).von, '2026-09-01');
+});
+
+test('Seit Auszahlung gibt es nur mit AdSense-Guthaben', () => {
+  const h = emptyHistory();
+  mergeSource(h, 'admob', { daily: [{ date: '2026-09-20', amount: 2, currency: 'EUR' }] }, '2026-09-23');
+  assert.equal(buildSummary(h, FX, null, new Date('2026-09-23T12:00:00Z')).googleSeitAuszahlung, null);
+  h.sources.adsense = { status: 'ok' };
+  mergeSource(h, 'adsense', { daily: [], balance: { amount: 10, currency: 'EUR' } }, '2026-09-23');
+  assert.equal(buildSummary(h, FX, null, new Date('2026-09-23T12:00:00Z')).googleSeitAuszahlung.wert, 12);
+});

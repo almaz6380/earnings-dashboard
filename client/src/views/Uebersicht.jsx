@@ -141,6 +141,13 @@ export default function Uebersicht({ s, onEinrichten }) {
         <Kachel label="30 Tage" wert={d30.jetzt} cur={cur} delta={d30.delta} fuss="ggü. 30 Tagen davor" />
         <Kachel label="Monat" wert={m.jetzt} cur={cur} delta={m.delta} fuss="ggü. Vormonat" titel="gegenüber dem gleichen Abschnitt des Vormonats" />
         <Kachel label="Vormonat" wert={s.kpis.lastMonth} cur={cur} fuss="ganzer Monat" />
+        {/* Die einzige Zahl, die bis zur nächsten Auszahlung nur wächst. Die Zeitfenster
+            daneben wandern mit und bleiben bei gleichmäßigen Einnahmen gleich hoch. */}
+        {s.googleSeitAuszahlung && (
+          <Kachel label="Seit Auszahlung" klasse="seit" wert={s.googleSeitAuszahlung.wert} cur={cur}
+            fuss={`Google · ${fmtMoney(s.googleSeitAuszahlung.offen, cur)} offen + ab ${fmtDay(s.googleSeitAuszahlung.von).slice(0, 6)}`}
+            titel="AdMob und AdSense: offenes Guthaben bei Google plus die Einnahmen, die Google dort noch nicht gutgeschrieben hat. Geschätzt, bis Google abrechnet." />
+        )}
       </div>
       <p className="hinweis klein" style={{ marginTop: -4 }}>
         Alle Zeiträume enden am letzten abgeschlossenen Tag{s.lastDayDate ? ` (${fmtDay(s.lastDayDate)})` : ''}. Der laufende Tag bleibt draußen und steht oben für sich. Quellen melden mit 1–2 Tagen Verzug.
