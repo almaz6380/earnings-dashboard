@@ -507,3 +507,26 @@ test('Seit Auszahlung gibt es nur mit AdSense-Guthaben', () => {
   mergeSource(h, 'adsense', { daily: [], balance: { amount: 10, currency: 'EUR' } }, '2026-09-23');
   assert.equal(buildSummary(h, FX, null, new Date('2026-09-23T12:00:00Z')).googleSeitAuszahlung.wert, 12);
 });
+
+test('App-Aufschlüsselung: Untertitel zählt nicht, Plattformen einzeln ausgewiesen', async () => {
+  const { appKey } = await import('../summary.js');
+  assert.equal(appKey('Swaply: Swap Your Habits'), appKey('Swaply'));
+  assert.equal(appKey('Mahjong Royale – Tile Match'), appKey('Mahjong Royale'));
+  // Ohne Haupttitel vor dem Doppelpunkt bleibt der ganze Name der Schlüssel.
+  assert.equal(appKey(': nur Untertitel'), 'nuruntertitel');
+  // Bindestriche im Namen selbst trennen nichts ab.
+  assert.equal(appKey('Doppel-Deutsch'), 'doppeldeutsch');
+
+  const h = emptyHistory();
+  // Nur Quellen mit Tageswerten zählen in die Summe und damit in die App-Liste.
+  mergeSource(h, 'admob', { daily: [{ date: '2026-09-01', amount: 4, currency: 'EUR' }] }, '2026-09-02');
+  mergeApps(h, 'admob', { apps: [
+    { id: 'ca~1', name: 'Swaply: Swap Your Habits', date: '2026-09-01', amount: 3, currency: 'EUR', platform: 'ios', storeId: '1' },
+    { id: 'ca~2', name: 'Swaply', date: '2026-09-01', amount: 1, currency: 'EUR', platform: 'android', storeId: 'app.swaply' },
+  ] }, '2026-09-02');
+  const s = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z'));
+  assert.equal(s.apps.length, 1);
+  assert.equal(s.apps[0].name, 'Swaply: Swap Your Habits');
+  assert.equal(s.apps[0].d30, 4);
+  assert.deepEqual(s.apps[0].plattformen.map((p) => [p.label, p.d30]), [['iOS', 3], ['Android', 1]]);
+});
