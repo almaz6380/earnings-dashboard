@@ -177,20 +177,22 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     if (!earnedIds.includes(id)) continue;
     for (const [appId, app] of Object.entries(proQuelle || {})) {
       const name = (app?.name || appId).trim();
-      const key = appKey(name);
-      if (!key) continue;
+      const basis = appKey(name);
+      if (!basis) continue;
+      // Eine Zeile je App und Plattform: iOS und Android sind im Store getrennte Apps und
+      // sollen einzeln sichtbar sein. Was ohne Plattform kommt (RevenueCat je Projekt),
+      // bekommt eine eigene Zeile ohne Zusatz, statt einer Plattform zugeschlagen zu werden.
+      const plattform = app?.platform || null;
+      const key = plattform ? `${basis}:${plattform}` : basis;
       let eintrag = appsByKey.get(key);
       if (!eintrag) {
-        eintrag = { key, name, icon: null, sources: {}, __daily: {}, __plattform: {} };
+        eintrag = { key, app: basis, plattform, name, icon: null, sources: {}, __daily: {} };
         appsByKey.set(key, eintrag);
       }
       if (name.length > eintrag.name.length) eintrag.name = name;
       // Dieselbe App kann aus mehreren Quellen kommen; das erste gefundene Icon genügt.
       if (!eintrag.icon && app?.icon) eintrag.icon = app.icon;
       const proSrc = (eintrag.sources[id] ||= { id, label: meta[id]?.label || id, __daily: {} });
-      // Nur AdMob und die Stores wissen, ob iOS oder Android. Was ohne Plattform kommt
-      // (RevenueCat je Projekt), bleibt in der Aufteilung aussen vor, statt geraten zu werden.
-      const proPf = app?.platform ? (eintrag.__plattform[app.platform] ||= {}) : null;
       for (const [date, byCur] of Object.entries(app?.daily || {})) {
         let sum = 0;
         for (const [cur, amt] of Object.entries(byCur)) {
@@ -199,7 +201,6 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
         }
         eintrag.__daily[date] = round2((eintrag.__daily[date] || 0) + sum);
         proSrc.__daily[date] = round2((proSrc.__daily[date] || 0) + sum);
-        if (proPf) proPf[date] = round2((proPf[date] || 0) + sum);
       }
     }
   }
@@ -212,14 +213,14 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     }
     return werte;
   };
+  const PLATTFORM = { ios: 'iOS', android: 'Android' };
   const apps = [...appsByKey.values()].map((a) => ({
-    key: a.key, name: a.name, icon: a.icon || null, ...zeitraeume(a.__daily),
+    key: a.key, app: a.app, plattform: a.plattform,
+    name: a.plattform ? `${a.name} (${PLATTFORM[a.plattform] || a.plattform})` : a.name,
+    icon: a.icon || null, ...zeitraeume(a.__daily),
     sources: Object.values(a.sources)
       .map(({ id, label, __daily }) => ({ id, label, ...zeitraeume(__daily) }))
       .sort((x, y) => y.d30 - x.d30),
-    plattformen: Object.entries(a.__plattform)
-      .map(([id, daily]) => ({ id, label: id === 'ios' ? 'iOS' : id === 'android' ? 'Android' : id, ...zeitraeume(daily) }))
-      .sort((x, y) => y.d30 - x.d30 || x.label.localeCompare(y.label)),
   })).sort((a, b) => b.d30 - a.d30 || b.month - a.month || a.name.localeCompare(b.name));
 
   const accountsEur = round2(['wise', 'paypal'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));

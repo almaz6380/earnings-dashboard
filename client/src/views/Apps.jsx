@@ -102,12 +102,6 @@ export default function Apps({ s }) {
                             </span>
                           ))}
                         </div>
-                        {a.plattformen?.length > 0 && (
-                          // 30 Tage wie die fett gesetzte Spalte daneben; auf dem Telefon ist sie die einzige.
-                          <div className="hinweis klein nowrap" style={{ marginTop: 1 }} title="Aufteilung der 30 Tage nach Plattform">
-                            {a.plattformen.map((p) => `${p.label} ${fmtMoney(p.d30, cur)}`).join(' · ')}
-                          </div>
-                        )}
                       </div>
                     </div>
                   </td>
@@ -129,7 +123,7 @@ export default function Apps({ s }) {
         <p className="hinweis klein">{nichtGezaehlt.join(' und ')} {nichtGezaehlt.length > 1 ? 'stehen' : 'steht'} hier nicht, weil RevenueCat den Abo-Umsatz schon meldet – sonst zählte er doppelt.</p>
       )}
       <p className="hinweis klein">
-        Gezählt wird nur, was auch in die Gesamtsumme geht, damit nichts doppelt erscheint. Gleiche App-Namen aus verschiedenen Quellen und Plattformen stehen in einer Zeile, ein Untertitel nach Doppelpunkt zählt dabei nicht mit. Darunter steht, was davon auf iOS und Android entfällt.
+        Gezählt wird nur, was auch in die Gesamtsumme geht, damit nichts doppelt erscheint. Jede Plattform steht in einer eigenen Zeile. Gleiche App-Namen aus verschiedenen Quellen werden je Plattform zusammengeführt, ein Untertitel nach Doppelpunkt zählt dabei nicht mit.
         AdMob meldet mit 1–2 Tagen Verzug, deshalb steht bei „gestern“ oft noch nichts.
       </p>
     </>

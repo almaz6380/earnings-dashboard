@@ -29,7 +29,8 @@ function inhalt(src, s) {
       return { betrag: src.d30, label: '30 Tage', spark: true, sub: `${abos} Abos · ${p} ${p === 1 ? 'Projekt' : 'Projekte'}` };
     }
     case 'admob': {
-      const n = (s.apps || []).filter((a) => a.sources.some((q) => q.id === 'admob')).length;
+      // Apps zählen, nicht Zeilen: iOS und Android derselben App stehen einzeln in der Liste.
+      const n = new Set((s.apps || []).filter((a) => a.sources.some((q) => q.id === 'admob')).map((a) => a.app || a.key)).size;
       return { betrag: src.d30, label: '30 Tage', spark: true, sub: n ? `${n} Apps` : null };
     }
     default:

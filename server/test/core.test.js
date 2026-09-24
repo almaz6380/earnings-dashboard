@@ -508,7 +508,7 @@ test('Seit Auszahlung gibt es nur mit AdSense-Guthaben', () => {
   assert.equal(buildSummary(h, FX, null, new Date('2026-09-23T12:00:00Z')).googleSeitAuszahlung.wert, 12);
 });
 
-test('App-Aufschlüsselung: Untertitel zählt nicht, Plattformen einzeln ausgewiesen', async () => {
+test('App-Aufschlüsselung: Untertitel zählt nicht, jede Plattform eine Zeile', async () => {
   const { appKey } = await import('../summary.js');
   assert.equal(appKey('Swaply: Swap Your Habits'), appKey('Swaply'));
   assert.equal(appKey('Mahjong Royale – Tile Match'), appKey('Mahjong Royale'));
@@ -525,8 +525,8 @@ test('App-Aufschlüsselung: Untertitel zählt nicht, Plattformen einzeln ausgewi
     { id: 'ca~2', name: 'Swaply', date: '2026-09-01', amount: 1, currency: 'EUR', platform: 'android', storeId: 'app.swaply' },
   ] }, '2026-09-02');
   const s = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z'));
-  assert.equal(s.apps.length, 1);
-  assert.equal(s.apps[0].name, 'Swaply: Swap Your Habits');
-  assert.equal(s.apps[0].d30, 4);
-  assert.deepEqual(s.apps[0].plattformen.map((p) => [p.label, p.d30]), [['iOS', 3], ['Android', 1]]);
+  // Je Plattform eine Zeile, beide gehören zur selben App.
+  assert.deepEqual(s.apps.map((a) => [a.name, a.d30]), [['Swaply: Swap Your Habits (iOS)', 3], ['Swaply (Android)', 1]]);
+  assert.equal(s.apps[0].app, s.apps[1].app);
+  assert.deepEqual(s.apps.map((a) => a.plattform), ['ios', 'android']);
 });
