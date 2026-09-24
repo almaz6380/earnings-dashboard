@@ -183,7 +183,9 @@ test('AdMob-App-Liste: Store-Kennung und Plattform je App', () => {
   ] });
   assert.deepEqual(m['ca-app-pub-1~11'], { storeId: 'com.beispiel.mahjong', platform: 'android' });
   assert.deepEqual(m['ca-app-pub-1~22'], { storeId: '1234567890', platform: 'ios' });
-  assert.equal(m['ca-app-pub-1~33'], undefined);
+  // Ohne Store-Verknüpfung bleibt wenigstens die Plattform, für die iOS/Android-Aufteilung.
+  assert.deepEqual(m['ca-app-pub-1~33'], { platform: 'android' });
+  assert.equal(storeInfoAusApps({ apps: [{ appId: 'ca-app-pub-1~44' }] })['ca-app-pub-1~44'], undefined);
   assert.deepEqual(storeInfoAusApps({}), {});
 
   // Nachschlagen: volle Schreibweise, und ersatzweise nur der Teil nach der Tilde -
