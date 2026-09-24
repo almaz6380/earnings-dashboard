@@ -24,13 +24,17 @@ export async function entdecke({ google }) {
 const dateObj = (d) => ({ year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() });
 
 // Der Bericht kennt nur die AdMob-App-ID. Welche Store-App dahintersteckt (und damit
-// das Icon), steht in der App-Liste. Gleicher Scope, kein neuer Zugang nötig.
+// das Icon) und auf welcher Plattform sie läuft, steht in der App-Liste. Gleicher Scope,
+// kein neuer Zugang nötig.
+// Die Plattform kennt AdMob auch für Apps, die nicht mit einem Store verknüpft sind -
+// sie hing früher an der Store-Kennung, und die iOS/Android-Aufteilung blieb dann leer.
 export function storeInfoAusApps(json) {
   const out = {};
   for (const app of json?.apps || []) {
     const storeId = app.linkedAppInfo?.appStoreId;
-    if (!app.appId || !storeId) continue;
-    const eintrag = { storeId, platform: app.platform === 'IOS' ? 'ios' : 'android' };
+    const platform = app.platform === 'IOS' ? 'ios' : app.platform === 'ANDROID' ? 'android' : null;
+    if (!app.appId || (!storeId && !platform)) continue;
+    const eintrag = { ...(storeId ? { storeId } : {}), ...(platform ? { platform } : {}) };
     out[app.appId] = eintrag;
     // Zusätzlich unter dem Teil nach der Tilde ablegen: Bericht und App-Liste sollten
     // dieselbe Schreibweise verwenden - täten sie es nicht, fände sich stillschweigend

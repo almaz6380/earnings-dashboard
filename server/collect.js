@@ -183,8 +183,10 @@ export function mergeApps(history, id, data, today) {
     if (!row?.date || typeof row.amount !== 'number' || !row.currency || !row.id) continue;
     const app = (proQuelle[row.id] ||= { name: row.name || row.id, daily: {} });
     if (row.name) app.name = row.name;
-    // Store-Kennung merken, damit das Icon später gefunden werden kann.
-    if (row.platform && row.storeId) { app.platform = row.platform; app.storeId = row.storeId; }
+    // Plattform für die iOS/Android-Aufteilung, Store-Kennung fürs Icon. Beides getrennt:
+    // viele AdMob-Apps sind nicht mit dem Store verknüpft, ihre Plattform kennt AdMob trotzdem.
+    if (row.platform) app.platform = row.platform;
+    if (row.storeId) app.storeId = row.storeId;
     const cur = row.currency.toUpperCase();
     // Wie bei mergeSource: ein neuer Abruf ersetzt den Tageswert, statt ihn zu verdoppeln.
     if (!app.daily[row.date] || app.daily[row.date].__fresh !== today) app.daily[row.date] = { __fresh: today };
