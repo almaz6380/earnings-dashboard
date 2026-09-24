@@ -7,7 +7,15 @@ const SUBS_ESTIMATE = 'revenuecat';
 const STORES = ['appstore', 'play'];
 
 // Namen gleicher Apps aus verschiedenen Quellen zusammenführen: Klein schreiben, alles außer Buchstaben/Ziffern weg.
-export const appKey = (name) => String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+// Ein Untertitel nach Doppelpunkt oder Gedankenstrich zählt nicht mit: im App Store heißt
+// eine App oft „Swaply: Swap Your Habits", bei Google Play nur „Swaply" - sonst stünde
+// dieselbe App zweimal in der Liste.
+const normKey = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+export const appKey = (name) => {
+  const s = String(name || '');
+  const kurz = normKey(s.split(/:| [-–—|] /)[0]);
+  return kurz || normKey(s);
+};
 
 // Was Google seit der letzten Auszahlung schuldet: das offene Guthaben plus alles, was
 // noch nicht darin steht. Google schreibt die Einnahmen eines Monats erst in den ersten
@@ -173,13 +181,16 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
       if (!key) continue;
       let eintrag = appsByKey.get(key);
       if (!eintrag) {
-        eintrag = { key, name, icon: null, sources: {}, __daily: {} };
+        eintrag = { key, name, icon: null, sources: {}, __daily: {}, __plattform: {} };
         appsByKey.set(key, eintrag);
       }
       if (name.length > eintrag.name.length) eintrag.name = name;
       // Dieselbe App kann aus mehreren Quellen kommen; das erste gefundene Icon genügt.
       if (!eintrag.icon && app?.icon) eintrag.icon = app.icon;
       const proSrc = (eintrag.sources[id] ||= { id, label: meta[id]?.label || id, __daily: {} });
+      // Nur AdMob und die Stores wissen, ob iOS oder Android. Was ohne Plattform kommt
+      // (RevenueCat je Projekt), bleibt in der Aufteilung aussen vor, statt geraten zu werden.
+      const proPf = app?.platform ? (eintrag.__plattform[app.platform] ||= {}) : null;
       for (const [date, byCur] of Object.entries(app?.daily || {})) {
         let sum = 0;
         for (const [cur, amt] of Object.entries(byCur)) {
@@ -188,6 +199,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
         }
         eintrag.__daily[date] = round2((eintrag.__daily[date] || 0) + sum);
         proSrc.__daily[date] = round2((proSrc.__daily[date] || 0) + sum);
+        if (proPf) proPf[date] = round2((proPf[date] || 0) + sum);
       }
     }
   }
@@ -205,6 +217,9 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     sources: Object.values(a.sources)
       .map(({ id, label, __daily }) => ({ id, label, ...zeitraeume(__daily) }))
       .sort((x, y) => y.d30 - x.d30),
+    plattformen: Object.entries(a.__plattform)
+      .map(([id, daily]) => ({ id, label: id === 'ios' ? 'iOS' : id === 'android' ? 'Android' : id, ...zeitraeume(daily) }))
+      .sort((x, y) => y.d30 - x.d30 || x.label.localeCompare(y.label)),
   })).sort((a, b) => b.d30 - a.d30 || b.month - a.month || a.name.localeCompare(b.name));
 
   const accountsEur = round2(['wise', 'paypal'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
