@@ -223,6 +223,16 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
       .sort((x, y) => y.d30 - x.d30),
   })).sort((a, b) => b.d30 - a.d30 || b.month - a.month || a.name.localeCompare(b.name));
 
+  // Tagesreihe je App, dieselben 90 Tage wie `series` - damit der Verlauf zeigen kann,
+  // welche App an welchem Tag wie viel beigetragen hat, nicht nur welche Quelle.
+  const start = series[0]?.date || today;
+  const mitWerten = [...appsByKey.values()].filter((a) => Object.entries(a.__daily).some(([d, v]) => d >= start && v));
+  const appSeries = series.map(({ date }) => {
+    const row = { date };
+    for (const a of mitWerten) row[a.key] = a.__daily[date] ?? 0;
+    return row;
+  });
+
   const accountsEur = round2(['wise', 'paypal'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
   const openEur = round2(['adsense'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
 
@@ -252,6 +262,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     series,
     monthly,
     payouts,
+    appSeries,
     accountsEur,
     openEur,
     googleSeitAuszahlung,
