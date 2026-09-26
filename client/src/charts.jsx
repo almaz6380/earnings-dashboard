@@ -113,12 +113,12 @@ function FlaechenTooltip({ active, payload, label, cur, fmtLabel, name }) {
 
 // ---- Legende (immer vorhanden, sobald zwei Serien im Bild sind) -----------
 
-export function Legende({ ids, labels }) {
+export function Legende({ ids, labels, farben }) {
   if (ids.length < 2) return null;
   return (
     <div className="legende">
       {ids.map((id) => (
-        <span key={id}><i className="schluessel" style={{ background: farbe(id) }} />{labels[id] || id}</span>
+        <span key={id}><i className="schluessel" style={{ background: farben?.[id] || farbe(id) }} />{labels[id] || id}</span>
       ))}
     </div>
   );
@@ -182,7 +182,7 @@ export function TrendFlaeche({ daten, feld, cur, color = SERIE.admob, name, fmtL
 
 // ---- Gestapelte Säulen: mehrere Quellen über die Zeit ---------------------
 
-export function StapelSaeulen({ daten, xKey, ids, labels, cur, fmtLabel, hoehe = 260 }) {
+export function StapelSaeulen({ daten, xKey, ids, labels, cur, fmtLabel, hoehe = 260, farben }) {
   const zeilen = markiereAussen(daten, ids, '__oben');
   return (
     <ResponsiveContainer width="100%" height={hoehe}>
@@ -194,7 +194,7 @@ export function StapelSaeulen({ daten, xKey, ids, labels, cur, fmtLabel, hoehe =
         <Tooltip content={<StapelTooltip cur={cur} labels={labels} fmtLabel={fmtLabel} />}
           cursor={{ fill: 'rgba(255,255,255,0.045)' }} />
         {ids.map((id) => (
-          <Bar key={id} dataKey={id} name={labels[id]} stackId="a" fill={farbe(id)}
+          <Bar key={id} dataKey={id} name={labels[id]} stackId="a" fill={farben?.[id] || farbe(id)}
             shape={<Saeule dataKey={id} />} maxBarSize={MAX_BALKEN} isAnimationActive={false} />
         ))}
       </BarChart>

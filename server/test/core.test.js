@@ -530,3 +530,18 @@ test('App-Aufschlüsselung: Untertitel zählt nicht, jede Plattform eine Zeile',
   assert.equal(s.apps[0].app, s.apps[1].app);
   assert.deepEqual(s.apps.map((a) => a.plattform), ['ios', 'android']);
 });
+
+test('Verlauf je App: Tagesreihe enthält jede App mit Werten, gleiche Tage wie series', () => {
+  const h = emptyHistory();
+  mergeSource(h, 'admob', { daily: [{ date: '2026-09-01', amount: 4, currency: 'EUR' }] }, '2026-09-02');
+  mergeApps(h, 'admob', { apps: [
+    { id: 'ca~1', name: 'Mahjong Royale', date: '2026-09-01', amount: 3, currency: 'EUR', platform: 'ios' },
+    { id: 'ca~2', name: 'Anigosha', date: '2026-09-01', amount: 1, currency: 'EUR', platform: 'android' },
+    { id: 'ca~3', name: 'Leer', date: '2026-09-01', amount: 0, currency: 'EUR' },
+  ] }, '2026-09-02');
+  const s = buildSummary(h, FX, null, new Date('2026-09-02T12:00:00Z'));
+  assert.equal(s.appSeries.length, s.series.length);
+  assert.equal(s.appSeries.at(-1).date, s.series.at(-1).date);
+  const tag = s.appSeries.find((r) => r.date === '2026-09-01');
+  assert.deepEqual(tag, { date: '2026-09-01', 'mahjongroyale:ios': 3, 'anigosha:android': 1 });
+});

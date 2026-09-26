@@ -16,6 +16,11 @@ export const SERIE = {
   paypal: '#e66767',     // Slot 8 rot
 };
 
+// Apps im Verlauf: dieselben Slots 1-5 in derselben Reihenfolge, der Rest gedämpft.
+// Mehr als fünf Farben trennt das Auge im Stapel nicht mehr sicher.
+export const APP_FARBEN = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181'];
+export const APP_REST = '#5b6573';
+
 export const FLAECHE = {
   app: '#0d1014',
   karte: '#151a21',
