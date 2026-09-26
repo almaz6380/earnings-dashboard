@@ -213,13 +213,17 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     }
     return werte;
   };
+  const nurMitBetrag = (daily) => Object.fromEntries(Object.entries(daily).filter(([, v]) => v));
   const PLATTFORM = { ios: 'iOS', android: 'Android' };
   const apps = [...appsByKey.values()].map((a) => ({
     key: a.key, app: a.app, plattform: a.plattform,
     name: a.plattform ? `${a.name} (${PLATTFORM[a.plattform] || a.plattform})` : a.name,
     icon: a.icon || null, ...zeitraeume(a.__daily),
+    // Tageswerte selbst, nur Tage mit Betrag: daraus rechnet die Oberfläche jeden
+    // Zeitraum, auch einen frei gewählten, ohne neuen Abruf.
+    tage: nurMitBetrag(a.__daily),
     sources: Object.values(a.sources)
-      .map(({ id, label, __daily }) => ({ id, label, ...zeitraeume(__daily) }))
+      .map(({ id, label, __daily }) => ({ id, label, ...zeitraeume(__daily), tage: nurMitBetrag(__daily) }))
       .sort((x, y) => y.d30 - x.d30),
   })).sort((a, b) => b.d30 - a.d30 || b.month - a.month || a.name.localeCompare(b.name));
 

@@ -1,30 +1,64 @@
 import React, { useMemo, useState } from 'react';
-import { fmtMoney, SOURCE_ORDER } from '../format.js';
+import { fmtMoney, fmtDay, SOURCE_ORDER } from '../format.js';
 import { StapelBalken, Legende, farbe } from '../charts.jsx';
 import { Punkt, Leer } from '../components.jsx';
 import AppIcon from '../AppIcon.jsx';
 
-const ZEITRAEUME = [{ id: 'd7', t: '7 Tage' }, { id: 'd30', t: '30 Tage' }, { id: 'month', t: 'Monat' }];
+const ZEITRAEUME = [
+  { id: 'heute', t: 'Heute' },
+  { id: 'gestern', t: 'Gestern' },
+  { id: 'woche', t: 'Woche' },
+  { id: 'monat', t: 'Monat' },
+  { id: 'individuell', t: 'Individuell' },
+];
+
+// Tage als YYYY-MM-DD in UTC, wie der Server sie schreibt - sonst verschöbe die
+// Zeitzone des Telefons jeden Zeitraum um einen Tag.
+const tagPlus = (ymd, n) => new Date(Date.parse(`${ymd}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+// Woche = seit Montag, Monat = seit dem Ersten, jeweils bis heute.
+function spanne(id, heute, von, bis) {
+  if (id === 'heute') return [heute, heute];
+  if (id === 'gestern') { const g = tagPlus(heute, -1); return [g, g]; }
+  if (id === 'woche') { const wt = (new Date(`${heute}T00:00:00Z`).getUTCDay() + 6) % 7; return [tagPlus(heute, -wt), heute]; }
+  if (id === 'monat') return [`${heute.slice(0, 7)}-01`, heute];
+  return von <= bis ? [von, bis] : [bis, von];
+}
+
+const summeIn = (tage, [von, bis]) => Math.round(
+  Object.entries(tage || {}).reduce((a, [d, v]) => (d >= von && d <= bis ? a + v : a), 0) * 100,
+) / 100;
 // Quellen, die überhaupt je App aufschlüsseln können (AdSense sind Webseiten, keine Apps).
 const APP_QUELLEN = ['admob', 'revenuecat', 'appstore', 'play'];
 
 export default function Apps({ s }) {
   const cur = s.baseCurrency;
   const apps = s.apps || [];
-  const [zeitraum, setZeitraum] = useState('d30');
+  const heute = s.todayDate || new Date().toISOString().slice(0, 10);
+  const [zeitraum, setZeitraum] = useState('monat');
+  const [von, setVon] = useState(() => tagPlus(heute, -29));
+  const [bis, setBis] = useState(heute);
   const [tabelle, setTabelle] = useState(false);
-  const labelZeitraum = ZEITRAEUME.find((z) => z.id === zeitraum).t;
+  const bereich = spanne(zeitraum, heute, von, bis);
+  const labelZeitraum = bereich[0] === bereich[1]
+    ? fmtDay(bereich[0])
+    : `${fmtDay(bereich[0]).slice(0, 6)} – ${fmtDay(bereich[1])}`;
 
-  const top = useMemo(
-    () => apps.filter((a) => a[zeitraum] > 0).sort((a, b) => b[zeitraum] - a[zeitraum]).slice(0, 10),
-    [apps, zeitraum],
-  );
+  // Je App und Quelle der Betrag im gewählten Zeitraum, aus den Tageswerten gerechnet.
+  const liste = useMemo(() => apps.map((a) => ({
+    ...a,
+    wert: summeIn(a.tage, bereich),
+    quellen: a.sources.map((q) => ({ ...q, wert: summeIn(q.tage, bereich) })),
+  })).sort((a, b) => b.wert - a.wert || a.name.localeCompare(b.name)), [apps, bereich[0], bereich[1]]);
+  const gesamt = Math.round(liste.reduce((x, a) => x + a.wert, 0) * 100) / 100;
+
+  const top = liste.filter((a) => a.wert > 0).slice(0, 10);
   // Eine Zeile je App, ein Feld je Quelle - so zeigt der Balken auch die Zusammensetzung.
-  const zeilen = useMemo(() => top.map((a) => {
-    const z = { name: a.name, __summe: a[zeitraum] };
-    for (const q of a.sources) z[q.id] = q[zeitraum] || 0;
+  const zeilen = top.map((a) => {
+    const z = { name: a.name, __summe: a.wert };
+    for (const q of a.quellen) z[q.id] = q.wert || 0;
     return z;
-  }), [top, zeitraum]);
+  });
   const ids = SOURCE_ORDER.filter((id) => zeilen.some((z) => z[id] > 0));
   const labels = Object.fromEntries(Object.values(s.bySource).map((x) => [x.id, x.label]));
 
@@ -47,7 +81,8 @@ export default function Apps({ s }) {
   return (
     <>
       <div className="filter">
-        <div className="segment">
+        {/* Fünf Reiter passen auf schmalen Telefonen knapp nicht - dann wird gewischt statt umgebrochen. */}
+        <div className="segment" style={{ maxWidth: '100%', overflowX: 'auto' }}>
           {ZEITRAEUME.map((z) => (
             <button key={z.id} className={zeitraum === z.id ? 'active' : ''} onClick={() => setZeitraum(z.id)}>{z.t}</button>
           ))}
@@ -58,6 +93,16 @@ export default function Apps({ s }) {
           <button className={tabelle ? 'active' : ''} onClick={() => setTabelle(true)}>Tabelle</button>
         </div>
       </div>
+      {zeitraum === 'individuell' && (
+        <div className="filter">
+          <label className="hinweis klein" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            von <input type="date" value={von} max={heute} onChange={(e) => e.target.value && setVon(e.target.value)} />
+          </label>
+          <label className="hinweis klein" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            bis <input type="date" value={bis} max={heute} onChange={(e) => e.target.value && setBis(e.target.value)} />
+          </label>
+        </div>
+      )}
 
       {!tabelle && (
         <div className="karte">
@@ -74,20 +119,17 @@ export default function Apps({ s }) {
       )}
 
       <div className="karte">
-        <h2>Alle Apps</h2>
+        <h2>Alle Apps · {labelZeitraum}</h2>
         <div className="rollen">
           <table>
             <thead>
               <tr>
                 <th>App</th>
-                <th className="zahl nowrap nur-breit">gestern</th>
-                <th className="zahl nowrap nur-breit">7 Tage</th>
-                <th className="zahl nowrap">30 Tage</th>
-                <th className="zahl nowrap nur-breit">Monat</th>
+                <th className="zahl nowrap">{ZEITRAEUME.find((z) => z.id === zeitraum).t}</th>
               </tr>
             </thead>
             <tbody>
-              {apps.map((a) => (
+              {liste.map((a) => (
                 <tr key={a.key}>
                   <td>
                     <div className="appzeile">
@@ -95,9 +137,9 @@ export default function Apps({ s }) {
                       <div style={{ minWidth: 0 }}>
                         <div>{a.name}</div>
                         <div className="hinweis klein nowrap" style={{ display: 'flex', gap: 9, marginTop: 1 }}>
-                          {a.sources.map((q) => (
+                          {a.quellen.map((q) => (
                             <span key={q.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                              title={`${q.label}: ${fmtMoney(q[zeitraum], cur)} · ${labelZeitraum}`}>
+                              title={`${q.label}: ${fmtMoney(q.wert, cur)} · ${labelZeitraum}`}>
                               <Punkt farbe={farbe(q.id)} />{q.label}
                             </span>
                           ))}
@@ -105,13 +147,16 @@ export default function Apps({ s }) {
                       </div>
                     </div>
                   </td>
-                  <td className="zahl nur-breit">{fmtMoney(a.yesterday, cur)}</td>
-                  <td className="zahl nur-breit">{fmtMoney(a.d7, cur)}</td>
-                  <td className="zahl"><b>{fmtMoney(a.d30, cur)}</b></td>
-                  <td className="zahl nur-breit">{fmtMoney(a.month, cur)}</td>
+                  <td className="zahl" style={a.wert ? undefined : { color: 'var(--ink3)' }}><b>{fmtMoney(a.wert, cur)}</b></td>
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr>
+                <td><b>Summe</b></td>
+                <td className="zahl"><b>{fmtMoney(gesamt, cur)}</b></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       </div>
@@ -124,7 +169,7 @@ export default function Apps({ s }) {
       )}
       <p className="hinweis klein">
         Gezählt wird nur, was auch in die Gesamtsumme geht, damit nichts doppelt erscheint. Jede Plattform steht in einer eigenen Zeile. Gleiche App-Namen aus verschiedenen Quellen werden je Plattform zusammengeführt, ein Untertitel nach Doppelpunkt zählt dabei nicht mit.
-        AdMob meldet mit 1–2 Tagen Verzug, deshalb steht bei „gestern“ oft noch nichts.
+        Woche heißt seit Montag, Monat seit dem Ersten. AdMob meldet mit 1–2 Tagen Verzug, deshalb stehen bei „Heute“ und „Gestern“ oft noch kleine oder gar keine Beträge.
       </p>
     </>
   );
