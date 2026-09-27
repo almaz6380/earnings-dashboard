@@ -35,7 +35,8 @@ export default function Apps({ s }) {
   const cur = s.baseCurrency;
   const apps = s.apps || [];
   const heute = s.todayDate || new Date().toISOString().slice(0, 10);
-  const [zeitraum, setZeitraum] = useState('monat');
+  // Heute zuerst: die Frage beim Öffnen ist meist, welche App heute wie viel bringt.
+  const [zeitraum, setZeitraum] = useState('heute');
   const [von, setVon] = useState(() => tagPlus(heute, -29));
   const [bis, setBis] = useState(heute);
   const [tabelle, setTabelle] = useState(false);
