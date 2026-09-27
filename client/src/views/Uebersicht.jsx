@@ -99,6 +99,16 @@ export default function Uebersicht({ s, onEinrichten }) {
     .filter((t) => t.wert > 0);
 
   const top = [...(s.apps || [])].filter((a) => a.d30 > 0).sort((a, b) => b.d30 - a.d30).slice(0, 5);
+  // Heute je App und Plattform, größter Umsatz oben. Apps ohne Betrag stehen mit darunter:
+  // sonst sähe „noch nichts gemeldet" aus wie „App fehlt".
+  const heuteApps = [...(s.apps || [])]
+    .map((a) => ({ ...a, heute: a.today || 0 }))
+    .sort((a, b) => b.heute - a.heute || a.name.localeCompare(b.name));
+  const heuteSumme = Math.round(heuteApps.reduce((x, a) => x + a.heute, 0) * 100) / 100;
+  const gestern = s.todayDate
+    ? new Date(Date.parse(`${s.todayDate}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)
+    : null;
+  const heroTitel = s.lastDayDate === gestern ? 'Gestern' : 'Letzter Tag';
   const maxApp = top[0]?.d30 || 1;
   const payouts = s.payouts.slice(0, 6);
 
@@ -117,7 +127,7 @@ export default function Uebersicht({ s, onEinrichten }) {
       <div className="hero">
         <div className="hero-kopf">
           <div>
-            <div className="hero-label">{s.lastDayDate ? `Letzter Tag · ${fmtDay(s.lastDayDate).slice(0, 6)}` : 'Letzter Tag'}</div>
+            <div className="hero-label">{s.lastDayDate ? `${heroTitel} · ${fmtDay(s.lastDayDate).slice(0, 6)}` : heroTitel}</div>
             <div className="hero-wert">{s.lastDayDate ? fmtMoney(s.kpis.lastDay, cur) : '–'}</div>
           </div>
           {heroDelta != null && <Delta wert={heroDelta} davor={heroSchnitt} cur={cur} gross fuss="gegenüber dem Durchschnitt der sieben Tage davor" />}
@@ -135,10 +145,42 @@ export default function Uebersicht({ s, onEinrichten }) {
         )}
       </div>
 
+      {/* Reihenfolge nach der Frage beim Öffnen: gestern, heute, welche App heute was bringt -
+          erst danach die Zeiträume und der Rest. */}
       <div className="raster kpi">
         <Kachel label={s.todayDate ? `Heute · ${fmtDay(s.todayDate).slice(0, 6)}` : 'Heute'} klasse="heute"
           wert={heuteGemeldet ? s.kpis.today : '–'} cur={cur} fuss={heuteFuss}
           titel="Der laufende Tag ist noch nicht vollständig und zählt in keinem Vergleich mit." />
+      </div>
+
+      {heuteApps.length > 0 && (
+        <div className="karte" style={{ marginBottom: 14 }}>
+          <h2>Heute je App</h2>
+          <table>
+            <tbody>
+              {heuteApps.map((a) => (
+                <tr key={a.key}>
+                  <td>
+                    <div className="appzeile">
+                      <AppIcon src={a.icon} name={a.name} color={farbe(a.sources[0]?.id)} size={28} />
+                      <div style={{ minWidth: 0 }}>{a.name}</div>
+                    </div>
+                  </td>
+                  <td className="zahl" style={a.heute ? undefined : { color: 'var(--ink3)' }}><b>{fmtMoney(a.heute, cur)}</b></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr><td><b>Summe</b></td><td className="zahl"><b>{fmtMoney(heuteSumme, cur)}</b></td></tr>
+            </tfoot>
+          </table>
+          <p className="hinweis klein" style={{ marginTop: 8 }}>
+            AdMob meldet den laufenden Tag mit Verzug; die Beträge füllen sich über den Tag.
+          </p>
+        </div>
+      )}
+
+      <div className="raster kpi">
         <Kachel label="7 Tage" wert={d7.jetzt} cur={cur} delta={d7.delta} davor={d7.davor} fuss="ggü. 7 Tagen davor" />
         <Kachel label="30 Tage" wert={d30.jetzt} cur={cur} delta={d30.delta} davor={d30.davor} fuss="ggü. 30 Tagen davor" />
         <Kachel label="Monat" wert={m.jetzt} cur={cur} delta={m.delta} davor={m.davor} fuss="ggü. Vormonat" titel="gegenüber dem gleichen Abschnitt des Vormonats" />
