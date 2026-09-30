@@ -1,0 +1,69 @@
+name: Einnahmen sammeln
+
+# Der geplante Sammellauf fuer alle Konten, seit dem Umzug zu Cloudflare (30.09.2026).
+#
+# Warum hier und nicht im Worker: Cloudflare Workers Free erlaubt 10 ms CPU je
+# Aufruf. App Store (Berichte entpacken) und Google Play (ZIP mit tausenden
+# CSV-Zeilen) brauchen mehr. Der Worker holt deshalb beim Tippen auf
+# "Aktualisieren" nur die leichten Quellen (SAMMELN_NUR_LEICHT in wrangler.toml);
+# alles zusammen laeuft hier, ohne CPU-Grenze, direkt gegen denselben Redis-Speicher.
+#
+# Kosten: privates Repository, ubuntu-latest, rund 1 Minute je Lauf, 5 Laeufe am
+# Tag - etwa 150 der 2000 freien Minuten im Monat.
+#
+# Die Tagesmeldung (Telegram) geht beim ersten Lauf des Tages raus; collect.js
+# merkt sich, dass heute schon gemeldet wurde.
+
+on:
+  schedule:
+    # 06:17, 10:17, 14:17, 18:17, 22:17 Wiener Sommerzeit. Nicht zur vollen Stunde,
+    # da staut GitHub die geplanten Laeufe und verschiebt sie teils um viele Minuten.
+    - cron: '17 4,8,12,16,20 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Zwei Laeufe gleichzeitig wuerden einander den Verlauf ueberschreiben.
+  group: sammeln
+  cancel-in-progress: false
+
+jobs:
+  sammeln:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+      KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+      TOKEN_ENC_KEY: ${{ secrets.TOKEN_ENC_KEY }}
+      BASE_CURRENCY: ${{ secrets.BASE_CURRENCY }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      REVENUECAT_CLIENT_ID: ${{ secrets.REVENUECAT_CLIENT_ID }}
+      REVENUECAT_CLIENT_SECRET: ${{ secrets.REVENUECAT_CLIENT_SECRET }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_BOT_NAME: ${{ secrets.TELEGRAM_BOT_NAME }}
+    steps:
+      # Solange der Speicher nicht eingetragen ist, gibt es nichts zu sammeln. Gruen
+      # beenden statt fuenfmal am Tag eine rote Fehlermail zu erzeugen.
+      - name: Eingerichtet?
+        id: pruefen
+        run: |
+          if [ -z "$KV_REST_API_URL" ] || [ -z "$KV_REST_API_TOKEN" ] || [ -z "$TOKEN_ENC_KEY" ]; then
+            echo "KV_REST_API_URL, KV_REST_API_TOKEN oder TOKEN_ENC_KEY fehlt als GitHub-Secret - uebersprungen." >> "$GITHUB_STEP_SUMMARY"
+            echo "bereit=nein" >> "$GITHUB_OUTPUT"
+          else
+            echo "bereit=ja" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.pruefen.outputs.bereit == 'ja'
+      - uses: actions/setup-node@v4
+        if: steps.pruefen.outputs.bereit == 'ja'
+        with:
+          node-version: 22
+          cache: npm
+      # Nur die Server-Abhaengigkeiten; den Client braucht der Sammellauf nicht.
+      - run: npm ci --ignore-scripts
+        if: steps.pruefen.outputs.bereit == 'ja'
+      - name: Sammeln
+        if: steps.pruefen.outputs.bereit == 'ja'
+        run: node server/cli.js collect --notify

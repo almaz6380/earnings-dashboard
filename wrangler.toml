@@ -1,0 +1,24 @@
+# Cloudflare Worker für Einnahmen (seit 30.09.2026, vorher Vercel).
+# Warum Cloudflare und was hier nicht läuft: siehe worker/index.js und docs/CLOUDFLARE.md.
+name = "einnahmen"
+main = "worker/index.js"
+compatibility_date = "2026-09-01"
+# node:crypto, node:zlib, Buffer und process.env für die Handler aus server/.
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./client/dist"
+binding = "ASSETS"
+# Nur die API weckt den Worker; Seiten, Skripte und Bilder liefert Cloudflare direkt
+# aus. Das kostet keine Worker-Aufrufe und keine CPU-Zeit.
+run_worker_first = ["/api/*"]
+
+[vars]
+# Nur die Quellen, die in 10 ms CPU passen; App Store und Google Play holt der
+# Sammellauf in GitHub Actions (.github/workflows/sammeln.yml).
+SAMMELN_NUR_LEICHT = "1"
+# Alte Passwort-Hashes (N=16384) nicht prüfen - sie sprengen das CPU-Limit.
+NUR_GUENSTIGE_HASHES = "1"
+
+[observability]
+enabled = true

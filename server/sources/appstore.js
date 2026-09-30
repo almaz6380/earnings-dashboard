@@ -5,7 +5,7 @@ import zlib from 'node:zlib';
 import { getBuffer, ymd, daysAgo } from '../http.js';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 
-export const meta = { id: 'appstore', label: 'App Store', art: 'Erlöse (Sales) + Auszahlung (Finance)', kind: 'payout',
+export const meta = { id: 'appstore', schwer: true, label: 'App Store', art: 'Erlöse (Sales) + Auszahlung (Finance)', kind: 'payout',
   needs: ['ASC_KEY_ID', 'ASC_ISSUER_ID', 'ASC_PRIVATE_KEY', 'ASC_VENDOR_NUMBER'], mehrfach: true,
   konsole: { url: 'https://appstoreconnect.apple.com/access/integrations/api', text: 'App-Store-Connect-Schlüssel' },
   // Apple bietet für Finanzberichte keinen Login für Fremd-Apps an - nur einen

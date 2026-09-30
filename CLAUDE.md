@@ -1,8 +1,11 @@
 # Hinweise für Claude Code
 
 Privates Dashboard, das Einnahmen aus RevenueCat, AdMob, AdSense, App Store, Google Play,
-Wise und PayPal in Euro an einer Stelle zeigt. Läuft lokal als Express-Server und auf
-Vercel als eine einzige Serverless-Funktion.
+Wise und PayPal in Euro an einer Stelle zeigt. Läuft lokal als Express-Server und seit
+30.09.2026 als **Cloudflare Worker** (`worker/index.js`); der geplante Sammellauf läuft in
+GitHub Actions. Warum und mit welchen Grenzen: **`docs/CLOUDFLARE.md` zuerst lesen.**
+Vorher lief es auf Vercel als eine einzige Serverless-Funktion; die Regeln dazu unten
+gelten nur noch für diesen Rückweg.
 
 ## Befehle
 
@@ -24,9 +27,14 @@ Ort, an dem Fehler im Client auffallen, es gibt keinen Typprüfer und kein Linti
 | `server/sources/` | je Einnahmequelle ein Modul mit `meta`, `vollstaendig`, `fetchData` |
 | `server/routen.js` | Zuordnung Pfad → Handler, für beide Betriebsarten |
 | `client/` | React, Vite, recharts; `views/` sind die vier Tabs |
-| `api/index.js` | einziger Vercel-Einstieg, reicht an `server/routen.js` weiter |
+| `worker/index.js` | Cloudflare-Einstieg: baut req/res nach, reicht an `server/routen.js` weiter |
+| `api/index.js` | alter Vercel-Einstieg, nur noch als Rückweg |
 
 ## Regeln, die aus Schaden entstanden sind
+
+- **Im Worker höchstens 10 ms CPU je Aufruf** (Cloudflare Workers Free). Rechnen zählt,
+  Warten auf Netz nicht. Schwere Quellen tragen `meta.schwer` und laufen nur im
+  Actions-Sammellauf; Passwörter nutzen scrypt N=2048. Einzelheiten in `docs/CLOUDFLARE.md`.
 
 - **Eine einzige Vercel-Funktion.** Der Hobby-Tarif erlaubt zwölf pro Deployment, je
   Endpunkt eine Datei wären neunzehn. `vercel.json` leitet alles auf `api/index.js` um.

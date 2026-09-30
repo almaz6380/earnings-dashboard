@@ -16,7 +16,7 @@
 <body>
 <main>
   <h1>Datenschutzerklärung</h1>
-  <p class="muted">Dienst „Einnahmen" (App für iOS und Android sowie Web) · Stand: September 2026</p>
+  <p class="muted">Dienst „Einnahmen" (App für iOS und Android sowie Web) · Stand: 30. September 2026</p>
 
   <h2>1. Verantwortlicher</h2>
   <p class="box">Josef Gallab (Einzelunternehmen)<br>Oberhofenweg 21b<br>6380 St. Johann in Tirol, Österreich<br>E-Mail: <a href="mailto:kontakt@wellbooked.at">kontakt@wellbooked.at</a><br><a href="/impressum.html">Impressum</a></p>
@@ -46,12 +46,13 @@
 
   <h2>6. Auftragsverarbeiter und Hosting</h2>
   <ul>
-    <li><strong>Hosting und Serverless-Funktionen:</strong> Vercel Inc. (USA), Ausführung in der Region Frankfurt (fra1).</li>
-    <li><strong>Datenbank:</strong> Supabase Inc. (USA; Postgres), Serverstandort Frankfurt (EU).</li>
+    <li><strong>Hosting und Serverfunktionen:</strong> Cloudflare, Inc. (USA), Cloudflare Workers. Anfragen werden im nächstgelegenen Rechenzentrum des Cloudflare-Netzes verarbeitet, für Nutzer in Europa in der Regel in der EU.</li>
+    <li><strong>Geplante Abrufläufe:</strong> GitHub, Inc. (USA; GitHub Actions). Mehrmals täglich ruft ein automatischer Lauf die eingerichteten Quellen ab und schreibt die Ergebnisse in die Datenbank; dabei werden deine hinterlegten Zugangsdaten kurzzeitig entschlüsselt, aber nicht bei GitHub gespeichert.</li>
+    <li><strong>Datenbank:</strong> Upstash, Inc. (USA; Redis), bereitgestellt über Vercel.</li>
     <li><strong>E-Mail-Versand</strong> (nur „Passwort vergessen"): Resend Inc.</li>
     <li><strong>Benachrichtigungen</strong> (nur wenn du sie einrichtest und den Kanal selbst wählst): die tägliche Zusammenfassung geht an den von dir angegebenen Telegram-Chat (Telegram FZ-LLC, Vereinigte Arabische Emirate) bzw. an das von dir angegebene ntfy-Thema (ntfy.sh, Deutschland; oder dein eigener ntfy-Server). Beide sind <strong>keine Auftragsverarbeiter</strong>, sondern Empfänger, die du selbst bestimmst — vergleichbar mit einer E-Mail-Adresse. Die Zusammenfassung enthält Tagesbeträge, keine Zugangsdaten. Für Telegram besteht kein Angemessenheitsbeschluss der EU; du wählst diesen Kanal in Kenntnis dessen (Art. 49 Abs. 1 lit. a DSGVO), und du kannst ihn jederzeit im Konto abschalten.</li>
   </ul>
-  <p>Mit den Auftragsverarbeitern Vercel, Supabase und Resend bestehen Verträge nach Art. 28 DSGVO; bei Übermittlung in die USA greifen die EU-Standardvertragsklauseln bzw. das EU-US Data Privacy Framework.</p>
+  <p>Mit den Auftragsverarbeitern Cloudflare, GitHub, Upstash und Resend bestehen Verträge nach Art. 28 DSGVO; bei Übermittlung in die USA greifen die EU-Standardvertragsklauseln bzw. das EU-US Data Privacy Framework.</p>
 
   <h2>7. Speicherdauer und Löschung</h2>
   <p>Deine Daten bleiben gespeichert, solange dein Konto besteht. Mit „Konto löschen" in der App werden Konto, Zugangsdaten, Google-Token, Verlauf und Einstellungen sofort und unwiderruflich gelöscht. Anmeldesperren verfallen nach 15 Minuten. Server-Logs des Hosting-Anbieters werden nach dessen Fristen gelöscht.</p>

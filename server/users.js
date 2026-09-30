@@ -16,18 +16,39 @@ const emailKey = (email) => `email:${normEmail(email)}`;
 // Datei- bzw. Zeilenschlüssel für Nutzerdaten. Lokal wird ":" zu "_" - das macht store.js.
 export const ukey = (id, name) => `u:${id}:${name}`;
 
+// Kosten der Passwortableitung je Format. Das Format steht vorn im gespeicherten Wert,
+// damit alte und neue Hashes nebeneinander prüfbar bleiben.
+//
+// Seit dem Umzug auf Cloudflare Workers (Free: 10 ms CPU je Aufruf) wird mit N=2048
+// gehasht - gemessen rund 4 ms. N=16384 braucht dort 40-50 ms, jede Anmeldung bräche ab.
+// Mit r=8 und einem langen Mindestpasswort (MIN_PW) bleibt das für ein privates
+// Dashboard vertretbar; die Anmeldebremse in auth.js begrenzt Durchprobieren zusätzlich.
+const SCRYPT = {
+  scrypt: { N: 16384, r: 8, p: 1 },
+  'scrypt-n2048': { N: 2048, r: 8, p: 1 },
+};
+const AKTUELL = 'scrypt-n2048';
+
+// Im Worker (NUR_GUENSTIGE_HASHES=1) wird ein alter N=16384-Hash gar nicht erst geprüft:
+// Er würde das CPU-Limit sprengen, und der Nutzer sähe nur einen abgebrochenen Aufruf
+// statt des Hinweises, das Passwort einmal über "Passwort vergessen" neu zu setzen.
+export function hashZuTeuer(stored) {
+  return process.env.NUR_GUENSTIGE_HASHES === '1' && String(stored || '').split('.')[0] === 'scrypt';
+}
+
 export function hashPassword(pw) {
   const salt = crypto.randomBytes(16);
-  const hash = crypto.scryptSync(String(pw), salt, 64, { N: 16384, r: 8, p: 1 });
-  return `scrypt.${salt.toString('base64')}.${hash.toString('base64')}`;
+  const hash = crypto.scryptSync(String(pw), salt, 64, SCRYPT[AKTUELL]);
+  return `${AKTUELL}.${salt.toString('base64')}.${hash.toString('base64')}`;
 }
 
 export function checkPassword(pw, stored) {
   if (typeof pw !== 'string' || typeof stored !== 'string') return false;
   const [alg, salt, hash] = stored.split('.');
-  if (alg !== 'scrypt' || !salt || !hash) return false;
+  const params = Object.hasOwn(SCRYPT, alg) ? SCRYPT[alg] : null;
+  if (!params || !salt || !hash || hashZuTeuer(stored)) return false;
   const want = Buffer.from(hash, 'base64');
-  const got = crypto.scryptSync(pw, Buffer.from(salt, 'base64'), want.length, { N: 16384, r: 8, p: 1 });
+  const got = crypto.scryptSync(pw, Buffer.from(salt, 'base64'), want.length, params);
   return crypto.timingSafeEqual(got, want);
 }
 

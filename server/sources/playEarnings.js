@@ -4,7 +4,7 @@ import { getJSON, getBuffer } from '../http.js';
 import { unzip } from '../zip.js';
 import { parseDelimited, toObjects, parseNumber } from '../csv.js';
 
-export const meta = { id: 'play', label: 'Google Play', art: 'Auszahlung (tatsächlich)', kind: 'payout',
+export const meta = { id: 'play', schwer: true, label: 'Google Play', art: 'Auszahlung (tatsächlich)', kind: 'payout',
   needs: ['PLAY_GCS_BUCKET'], google: true, mehrfach: true,
   konsole: { url: 'https://play.google.com/console', text: 'Play Console öffnen' },
   // Den Bucket-Namen gibt keine Programmierschnittstelle heraus - der muss aus der Konsole kommen.
