@@ -16,3 +16,5 @@ client/android/local.properties
 *.jks
 
 client/.env.local
+.dev.vars
+.wrangler/

@@ -22,6 +22,9 @@ export default withCors(async function handler(req, res) {
   const b = body(req);
   if (!b.email || !b.password) return res.status(400).json({ fehler: 'E-Mail und Passwort angeben.' });
   const r = await tryLogin(req, b.email, b.password);
+  if (r.veraltet) {
+    return res.status(401).json({ fehler: 'Dein Passwort muss nach dem Serverumzug einmal neu gesetzt werden. Bitte „Passwort vergessen“ nutzen.' });
+  }
   if (!r.ok) {
     return res.status(401).json({ fehler: r.wartenSek ? `Zu viele Fehlversuche. Bitte ${Math.ceil(r.wartenSek / 60)} Min. warten.` : `E-Mail oder Passwort falsch.${r.verbleibend ? ` Noch ${r.verbleibend} Versuche.` : ''}` });
   }

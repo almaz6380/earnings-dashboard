@@ -1,0 +1,105 @@
+name: Cloudflare veroeffentlichen
+
+# Einnahmen laeuft seit dem 30.09.2026 als Cloudflare Worker (worker/index.js).
+# Dieser Workflow testet, baut den Client, veroeffentlicht und uebertraegt die
+# Schluessel aus den GitHub-Secrets zu Cloudflare.
+#
+# Kostenlos: Das Repository ist privat, ein Lauf braucht rund 2 Minuten auf
+# ubuntu-latest (Faktor 1, nicht 10 wie macOS). Cloudflare Workers Free kostet nichts.
+#
+# Noetig als GitHub-Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID.
+# Alles andere ist optional und wird nur uebertragen, wenn es gesetzt ist -
+# Liste und Bedeutung: docs/CLOUDFLARE.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: cloudflare
+  cancel-in-progress: false
+
+jobs:
+  veroeffentlichen:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      # Ein neues Cloudflare-Konto hat noch keine workers.dev-Adresse; ohne sie
+      # bricht `wrangler deploy` ab. Einmalig anlegen, danach ist das ein No-op.
+      - name: workers.dev-Adresse sicherstellen
+        run: |
+          api="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain"
+          name=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$api" | jq -r '.result.subdomain // empty')
+          if [ -z "$name" ]; then
+            curl -s -X PUT -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'content-type: application/json' \
+              -d '{"subdomain":"almaz6380"}' "$api" | jq -e '.success' >/dev/null
+            name=almaz6380
+          fi
+          echo "WORKERS_SUBDOMAIN=$name" >> "$GITHUB_ENV"
+
+      - name: Veroeffentlichen
+        run: npx --yes wrangler@4 deploy
+
+      - name: Schluessel uebertragen
+        env:
+          KV_REST_API_URL: ${{ secrets.KV_REST_API_URL }}
+          KV_REST_API_TOKEN: ${{ secrets.KV_REST_API_TOKEN }}
+          TOKEN_ENC_KEY: ${{ secrets.TOKEN_ENC_KEY }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          PUBLIC_URL: ${{ secrets.PUBLIC_URL }}
+          APP_ORIGINS: ${{ secrets.APP_ORIGINS }}
+          BASE_CURRENCY: ${{ secrets.BASE_CURRENCY }}
+          SIGNUP: ${{ secrets.SIGNUP }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          REVENUECAT_CLIENT_ID: ${{ secrets.REVENUECAT_CLIENT_ID }}
+          REVENUECAT_CLIENT_SECRET: ${{ secrets.REVENUECAT_CLIENT_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_BOT_NAME: ${{ secrets.TELEGRAM_BOT_NAME }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+        run: |
+          node scripts/cloudflare-secrets.mjs "$RUNNER_TEMP/secrets.json" \
+            KV_REST_API_URL KV_REST_API_TOKEN TOKEN_ENC_KEY SESSION_SECRET CRON_SECRET PUBLIC_URL \
+            APP_ORIGINS BASE_CURRENCY SIGNUP GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET \
+            REVENUECAT_CLIENT_ID REVENUECAT_CLIENT_SECRET TELEGRAM_BOT_TOKEN TELEGRAM_BOT_NAME \
+            RESEND_API_KEY MAIL_FROM
+          if [ "$(cat "$RUNNER_TEMP/secrets.json")" != "{}" ]; then
+            npx --yes wrangler@4 secret bulk "$RUNNER_TEMP/secrets.json"
+          fi
+          rm -f "$RUNNER_TEMP/secrets.json"
+
+      - name: Gegenprobe
+        run: |
+          url="https://einnahmen.$WORKERS_SUBDOMAIN.workers.dev"
+          # Eine frische workers.dev-Adresse braucht manchmal eine Minute, bis sie antwortet.
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$url/api/health" || true)
+            # 503 heisst: Worker laeuft, es fehlen nur noch Schluessel (siehe "fehlt").
+            { [ "$code" = 200 ] || [ "$code" = 503 ]; } && break
+            sleep 10
+          done
+          echo "api/health: $code"
+          curl -s "$url/api/health" | jq '{bereit, fehlt, speicher, speicherErreichbar}'
+          {
+            echo "## Einnahmen veroeffentlicht"
+            echo ""
+            echo "- Adresse: $url"
+            echo "- Google-OAuth-Weiterleitung: $url/api/google/callback"
+            echo "- RevenueCat-Weiterleitung: $url/api/revenuecat/callback"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$code" = 200 ] || [ "$code" = 503 ]

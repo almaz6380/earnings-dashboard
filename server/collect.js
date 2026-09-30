@@ -56,7 +56,12 @@ export function zugaenge(u, src, eintrag) {
   };
 }
 
-export async function runCollect({ user, userId, notify = true } = {}) {
+// nurLeicht: Quellen mit meta.schwer (App-Store-Berichte entpacken, Play-ZIP samt
+// tausender CSV-Zeilen) auslassen. Der Cloudflare Worker hat im Free-Tarif 10 ms CPU je
+// Aufruf; diese beiden sprengen das. Sie holt der geplante Sammellauf in GitHub Actions
+// (.github/workflows/sammeln.yml), der ohne diese Grenze läuft. Ihr Stand im Verlauf
+// bleibt dabei unangetastet.
+export async function runCollect({ user, userId, notify = true, nurLeicht = false } = {}) {
   const u = user || (await getUser(userId));
   if (!u) throw new Error('Konto nicht gefunden.');
   const started = Date.now();
@@ -72,6 +77,7 @@ export async function runCollect({ user, userId, notify = true } = {}) {
 
   for (const src of SOURCES) {
     const id = src.meta.id;
+    if (nurLeicht && src.meta.schwer) { results[id] = { status: 'spaeter' }; continue; }
     const s = (history.sources[id] ||= {});
     const liste = nutzbare(cfg, id);
     if (!liste.length) { results[id] = { status: 'unconfigured' }; s.status = 'unconfigured'; continue; }
@@ -104,7 +110,10 @@ export async function runCollect({ user, userId, notify = true } = {}) {
   }
 
   // Icons erst nach allen Quellen: braucht die gesammelten Store-Kennungen.
-  try { await ergaenzeIcons(history); } catch { /* ohne Icons ist der Lauf trotzdem gültig */ }
+  // Im leichten Lauf nicht: Die Play-Seiten sind groß, sie zu durchsuchen kostet CPU.
+  if (!nurLeicht) {
+    try { await ergaenzeIcons(history); } catch { /* ohne Icons ist der Lauf trotzdem gültig */ }
+  }
 
   pruneHistory(history);
   await saveJSON(hKey, history);
@@ -130,7 +139,7 @@ export const schonGemeldet = (latest, tag) => latest?.gemeldetAm === tag;
 // Was nicht mehr passt, kommt beim nächsten Lauf dran (Vercel begrenzt die Laufzeit einer Funktion).
 // Konten, die jünger als minAlterMs gesammelt wurden, bleiben liegen: beim externen Cron hat
 // sie meist gerade die offene App geholt, und zwei Läufe gleichzeitig verlieren einander Daten.
-export async function runCollectAll({ notify = true, budgetMs = 50_000, minAlterMs = 0, now = Date.now() } = {}) {
+export async function runCollectAll({ notify = true, budgetMs = 50_000, minAlterMs = 0, nurLeicht = false, now = Date.now() } = {}) {
   const ids = await listUserIds();
   const konten = [];
   for (const id of ids) {
@@ -146,7 +155,7 @@ export async function runCollectAll({ notify = true, budgetMs = 50_000, minAlter
     const meldetNoch = notify && !schonGemeldet(k.latest, heute);
     if (now - k.last < minAlterMs && !meldetNoch) { out.frisch++; continue; }
     if (Date.now() - now > budgetMs) { out.offen++; continue; }
-    try { await runCollect({ userId: k.id, notify }); out.gelaufen++; }
+    try { await runCollect({ userId: k.id, notify, nurLeicht }); out.gelaufen++; }
     catch (e) { out.fehler++; console.error(`Sammellauf ${k.id}: ${e.message}`); }
   }
   out.ms = Date.now() - now;

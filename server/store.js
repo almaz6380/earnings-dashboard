@@ -11,7 +11,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
+// Im Cloudflare Worker gibt es weder Dateisystem noch verlässlich import.meta.url; dort
+// ist Redis Pflicht und DATA_DIR bleibt ungenutzt. Ohne den Schutz bräche schon das Laden.
+const DATA_DIR = (() => {
+  try { return path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data'); } catch { return 'data'; }
+})();
 const TABLE = process.env.SUPABASE_TABLE || 'earnings_kv';
 
 const redisUrl = () => process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '';

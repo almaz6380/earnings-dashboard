@@ -4,7 +4,7 @@
 // Login-Bremse: 5 Fehlversuche je IP+E-Mail -> 15 Minuten Sperre.
 import crypto from 'node:crypto';
 import { loadJSON, saveJSON } from './store.js';
-import { findByEmail, checkPassword, getUser, normEmail } from './users.js';
+import { findByEmail, checkPassword, hashZuTeuer, getUser, normEmail } from './users.js';
 
 export const COOKIE = 'ed_session';
 export const TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -98,6 +98,9 @@ export async function tryLogin(req, email, password, now = Date.now()) {
   const { fails, entry } = await bremse(key, now);
   if (entry.until > now) return { ok: false, wartenSek: Math.ceil((entry.until - now) / 1000) };
   const u = await findByEmail(email);
+  // Kein Fehlversuch: Das Passwort kann stimmen, es ist nur mit dem alten, teuren
+  // Verfahren gespeichert, das der Worker nicht mehr prüft.
+  if (u && hashZuTeuer(u.pw)) return { ok: false, veraltet: true };
   if (u && checkPassword(password, u.pw)) {
     if (fails[key]) { delete fails[key]; await saveJSON('login_fails', fails); }
     return { ok: true, user: u };
