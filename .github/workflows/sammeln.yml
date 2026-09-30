@@ -8,17 +8,19 @@ name: Einnahmen sammeln
 # "Aktualisieren" nur die leichten Quellen (SAMMELN_NUR_LEICHT in wrangler.toml);
 # alles zusammen laeuft hier, ohne CPU-Grenze, direkt gegen denselben Redis-Speicher.
 #
-# Kosten: privates Repository, ubuntu-latest, rund 1 Minute je Lauf, 5 Laeufe am
-# Tag - etwa 150 der 2000 freien Minuten im Monat.
+# Kosten: keine. Das Repository ist seit dem 30.09.2026 oeffentlich, damit sind
+# Actions-Minuten unbegrenzt frei (privat waren die 2000 Freiminuten aufgebraucht).
+# Wird es wieder privat, den Zeitplan auf wenige Laeufe am Tag zuruecknehmen.
 #
 # Die Tagesmeldung (Telegram) geht beim ersten Lauf des Tages raus; collect.js
 # merkt sich, dass heute schon gemeldet wurde.
 
 on:
   schedule:
-    # 06:17, 10:17, 14:17, 18:17, 22:17 Wiener Sommerzeit. Nicht zur vollen Stunde,
-    # da staut GitHub die geplanten Laeufe und verschiebt sie teils um viele Minuten.
-    - cron: '17 4,8,12,16,20 * * *'
+    # Stuendlich von 06:17 bis 23:17 Wiener Sommerzeit, nachts nicht: Der erste Lauf
+    # des Tages verschickt die Tagesmeldung, und die soll morgens kommen, nicht um 2 Uhr.
+    # Nicht zur vollen Stunde - da staut GitHub die geplanten Laeufe.
+    - cron: '17 4-21 * * *'
   workflow_dispatch:
 
 concurrency:
