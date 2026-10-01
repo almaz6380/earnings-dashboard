@@ -11,7 +11,7 @@ import { sumSales, sumFinance, makeJwt, salesByApp, reportUrl, appleFehler, zusa
 import { parseReport, storeInfoAusApps, zuStore } from '../sources/admob.js';
 import { ausITunes, ausPlaySeite, findeIcon } from '../icons.js';
 import { parse as parseAdsense } from '../sources/adsense.js';
-import { chartToDaily, mergeProjects, fetchData } from '../sources/revenuecat.js';
+import { chartToDaily, mergeProjects, fetchData, projektId } from '../sources/revenuecat.js';
 
 const fx = (f) => fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', f), 'utf8');
 
@@ -333,4 +333,12 @@ test('Quellen: ein Eintrag ist erst mit allen Pflichtwerten nutzbar', async () =
     const keys = new Set(s.meta.felder.map((f) => f.key));
     for (const k of s.meta.needs) assert.ok(keys.has(k), `${s.meta.id}: ${k} fehlt in felder`);
   }
+});
+
+test('RevenueCat: Projekt-ID aus kopierter Adresse herausziehen', () => {
+  assert.equal(projektId('eabb7358'), 'eabb7358');
+  assert.equal(projektId(' eabb7358/overview '), 'eabb7358');
+  assert.equal(projektId('https://app.revenuecat.com/projects/eabb7358/overview'), 'eabb7358');
+  assert.equal(projektId('app.revenuecat.com/projects/eabb7358?x=1'), 'eabb7358');
+  assert.equal(projektId(''), '');
 });

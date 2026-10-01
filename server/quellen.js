@@ -98,7 +98,10 @@ function saeubere(src, eingabe, vorher = {}) {
     if (!(f.key in eingabe)) continue;
     const wert = eingabe[f.key];
     if (wert === null || wert === '') delete eintrag[f.key];
-    else eintrag[f.key] = String(wert).trim().slice(0, 20000);
+    else {
+      const text = String(wert).trim().slice(0, 20000);
+      eintrag[f.key] = f.saeubern ? f.saeubern(text) : text;
+    }
   }
   if ('label' in eingabe) {
     const l = String(eingabe.label || '').trim().slice(0, 60);
