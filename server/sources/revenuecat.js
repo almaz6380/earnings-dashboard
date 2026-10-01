@@ -11,8 +11,17 @@ export const meta = { id: 'revenuecat', label: 'RevenueCat', art: 'Abo-Umsatz (S
   help: 'Am einfachsten mit RevenueCat anmelden. Ohne Login je Projekt einen Secret Key v2 mit der Berechtigung „Charts & Metrics: Read" eintragen.',
   felder: [
     { key: 'REVENUECAT_API_KEY', label: 'Secret API Key v2', secret: true, optional: true, hint: 'nur nötig ohne RevenueCat-Login' },
-    { key: 'REVENUECAT_PROJECT_ID', label: 'Projekt-ID', hint: 'steht in der Adresszeile: app.revenuecat.com/projects/<ID>' },
+    { key: 'REVENUECAT_PROJECT_ID', label: 'Projekt-ID', hint: 'steht in der Adresszeile: app.revenuecat.com/projects/<ID>',
+      saeubern: (w) => projektId(w) },
   ] };
+
+// Aus der Adresszeile wird gern mehr kopiert als die ID ("eabb7358/overview" oder
+// die ganze Adresse). RevenueCat antwortet darauf nur mit 404 - also die ID herausziehen.
+export function projektId(text) {
+  const s = String(text ?? '').trim();
+  const ausAdresse = /\/projects\/([^/?#\s]+)/.exec(s);
+  return (ausAdresse ? ausAdresse[1] : s.split(/[/?#\s]/)[0]).trim();
+}
 
 // Ohne Projekt-ID geht nichts; der Zugang kommt vom Login oder vom Schlüssel.
 export const vollstaendig = (e) => !!(e?.REVENUECAT_PROJECT_ID && (e.REVENUECAT_API_KEY || e.oauth));
@@ -68,7 +77,8 @@ export async function fetchProject(p, { days = 60, fetchJSON = getJSON, base = '
 // Ein Eintrag ist ein Projekt. Mehrere Einträge führt der Sammellauf zusammen.
 export async function fetchData({ eintrag = {}, revenuecat, base = 'EUR', days = 60, fetchJSON = getJSON } = {}) {
   const headers = await kopf(eintrag, revenuecat);
-  const p = { id: eintrag.REVENUECAT_PROJECT_ID, label: eintrag.label || eintrag.REVENUECAT_PROJECT_ID };
+  const id = projektId(eintrag.REVENUECAT_PROJECT_ID);
+  const p = { id, label: eintrag.label || id };
   const r = await fetchProject(p, { days, fetchJSON, base, headers });
   return mergeProjects([r], [], r.note ? [r.note] : []);
 }
