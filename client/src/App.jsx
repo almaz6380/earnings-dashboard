@@ -20,15 +20,20 @@ const TABS = [
   { id: 'konto', label: 'Konto', icon: Icon.konto },
 ];
 
-// So alt dürfen die Zahlen werden, solange die App offen ist, dann holt sie still neue.
-// Bei geschlossener App übernimmt das ein externer Cron im selben Takt (docs/START.md),
-// dessen Ergebnis die App nur noch lädt, statt selbst ein zweites Mal zu sammeln.
-// Öfter lohnt nicht: jeder Lauf fragt alle Quellen ab, und die meisten melden ohnehin
-// nur tageweise.
+// So alt dürfen die Zahlen werden, solange die App offen ist, dann sammelt sie selbst
+// nach. Öfter lohnt nicht: jeder Lauf fragt alle Quellen ab, und die meisten melden
+// ohnehin nur tageweise.
 const AUTO_MS = 15 * 60 * 1000;
+// In diesem Takt fragt die offene App, ob auf dem Server etwas Neues liegt. Nötig, weil
+// der geplante Sammellauf (GitHub Actions, auch die schweren Quellen) dort Zahlen
+// schreibt, von denen die App sonst bis zum nächsten Tippen nichts wüsste. Gefragt wird
+// nur nach dem Zeitstempel (/api/stand, ein Schlüssel im Speicher); den ganzen Stand
+// holt sie erst, wenn er sich geändert hat.
 const PRUEF_MS = 60 * 1000;
 
 const veraltet = (s) => !s?.collectedAt || Date.now() - Date.parse(s.collectedAt) >= AUTO_MS;
+// Wie im Server: der Tag, nach dem „heute" und „gestern" gerechnet werden (UTC).
+const heute = () => new Date().toISOString().slice(0, 10);
 
 const rechtsLink = (basis, pfad) => `${basis || (NATIV ? getServer() : '')}/${pfad}`;
 
@@ -228,21 +233,47 @@ export default function App() {
     load().then((s) => { if (s && veraltet(s)) collect({ auto: true }); });
   }, [authed, load, collect]);
 
-  // Automatisch aktualisieren: alle PRUEF_MS nachsehen, ob die Zahlen älter als AUTO_MS
-  // sind, und beim Zurückkommen in App oder Tab sofort. Veraltet heißt zuerst nur: den
-  // Serverstand holen. Erst wenn auch der alt ist, sammelt die App selbst. Im Hintergrund
-  // ruht sie; dann ist der Cron auf dem Server zuständig.
+  // Von selbst aktuell bleiben: jede Minute fragen, ob der Server neuer ist als die
+  // Anzeige, und beim Zurückkommen in App oder Tab sofort nachladen. Ist der Server
+  // neuer - etwa nach dem geplanten Sammellauf -, kommt der volle Stand. Hat auch er
+  // nichts Neues und sind die Zahlen über AUTO_MS alt, sammelt die App selbst. Im
+  // Hintergrund ruht sie; dann ist der geplante Lauf auf dem Server zuständig.
   useEffect(() => {
     if (!authed) return undefined;
     let zuletzt = 0;
+    let tag = heute();
+    let offen = false; // auf langsamem Netz nicht zwei Prüfungen übereinander stapeln
     const pruefe = async ({ rueckkehr = false } = {}) => {
-      if (document.hidden || navigator.onLine === false || laeuft.current) return;
+      if (offen || document.hidden || navigator.onLine === false || laeuft.current) return;
       // App-Rückkehr und visibilitychange kommen auf dem Telefon beide - einmal reicht.
       if (Date.now() - zuletzt < 2000) return;
-      if (!rueckkehr && !veraltet(stateRef.current)) return;
       zuletzt = Date.now();
-      const s = await load();
-      if (s && veraltet(s)) collect({ auto: true });
+      offen = true;
+      try {
+        // Nach Mitternacht sind „heute" und „gestern" verschoben, auch ohne neuen Lauf.
+        const jetzt = heute();
+        const tagwechsel = jetzt !== tag;
+        tag = jetzt;
+        let s = stateRef.current;
+        let neu = rueckkehr || tagwechsel || !s;
+        if (!neu) {
+          const stand = await api('/api/stand').catch((e) => {
+            // Ohne Netz oder bei einem Serverfehler still bleiben, sonst stünde jede
+            // Minute eine rote Zeile da; nur eine abgelaufene Sitzung muss auffallen.
+            if (e.status === 401) abgemeldet();
+            return null;
+          });
+          if (!stand) return;
+          neu = stand.collectedAt !== s.collectedAt;
+          // Auch der Server hat nichts Neueres: dann sammelt die App selbst, aber nur,
+          // wenn die Zahlen wirklich alt sind.
+          if (!neu && !veraltet(s)) return;
+        }
+        if (neu) s = await load();
+        if (s && veraltet(s)) collect({ auto: true });
+      } finally {
+        offen = false;
+      }
     };
     const zurueck = () => pruefe({ rueckkehr: true });
     const t = setInterval(pruefe, PRUEF_MS);
@@ -255,7 +286,7 @@ export default function App() {
       window.removeEventListener('online', zurueck);
       weg();
     };
-  }, [authed, load, collect]);
+  }, [authed, load, collect, abgemeldet]);
   useEffect(() => { history.replaceState(null, '', `#${tab}`); }, [tab]);
   useEffect(() => { if (authed !== null) splashAusblenden(); }, [authed]);
   useEffect(() => beiZurueck(() => {

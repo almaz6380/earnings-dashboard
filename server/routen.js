@@ -4,6 +4,7 @@
 import health from './handlers/health.js';
 import state from './handlers/state.js';
 import status from './handlers/status.js';
+import stand from './handlers/stand.js';
 import collect from './handlers/collect.js';
 import login from './handlers/login.js';
 import logout from './handlers/logout.js';
@@ -44,6 +45,7 @@ const ROH = {
   '/api/health': health,
   '/api/state': state,
   '/api/status': status,
+  '/api/stand': stand,
   '/api/collect': collect,
   '/api/login': login,
   '/api/logout': logout,

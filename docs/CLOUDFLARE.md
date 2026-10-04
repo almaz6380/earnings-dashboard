@@ -20,7 +20,8 @@ verbunden werden. Konto und Verlauf liegen unverschlüsselt in Redis und sind er
 | API und Anmeldung | Worker `einnahmen` (`worker/index.js` → `server/routen.js`) | dieselben Handler wie lokal |
 | Seiten und App-Dateien | Cloudflare Static Assets aus `client/dist` | wecken den Worker nicht, kosten nichts |
 | „Aktualisieren“ in der App | Worker, **nur leichte Quellen** | Workers Free: 10 ms CPU je Aufruf |
-| Geplanter Sammellauf, alle Quellen | GitHub Actions, `.github/workflows/sammeln.yml`, 5× täglich | App Store und Play brauchen mehr als 10 ms CPU |
+| Geplanter Sammellauf, alle Quellen | GitHub Actions, `.github/workflows/sammeln.yml`, stündlich | App Store und Play brauchen mehr als 10 ms CPU |
+| „Liegt Neues vor?“ aus der offenen App | Worker, `/api/stand` | ein Zeitstempel aus dem Speicher, damit der Minutentakt nichts kostet |
 | Speicher | derselbe Upstash-Redis wie vorher | nichts umzuziehen |
 
 Veröffentlicht wird automatisch bei jedem Push auf `main`
@@ -36,6 +37,11 @@ Worker-Secrets zu Cloudflare.
   - Quellen mit `meta.schwer` (App Store, Google Play) holt nur der Actions-Lauf.
 - **Sammeln nie in den Worker zurückholen.** Ein Cron-Trigger im Worker hätte dieselbe
   10-ms-Grenze.
+- **Was die offene App im Takt fragt, muss `/api/stand` bleiben.** Die Oberfläche fragt
+  jede Minute nach dem Zeitstempel des letzten Laufs und lädt `/api/state` nur, wenn er
+  sich geändert hat. `/api/state` im Minutentakt wäre beides zu teuer: es baut die
+  Zusammenfassung über zwei Jahre Verlauf neu (CPU) und liest Verlauf und Kurse mit
+  (Redis-Befehle). Mit einem Konto und offener App sind es so rund 1500 Befehle am Tag.
 - **`api/index.js` und `vercel.json` bleiben vorerst liegen.** Sie stören den Worker nicht
   und erlauben den Rückweg, falls Vercel je wieder gebraucht wird.
 
