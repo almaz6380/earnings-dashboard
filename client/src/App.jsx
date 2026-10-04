@@ -21,19 +21,26 @@ const TABS = [
 ];
 
 // So alt dürfen die Zahlen werden, solange die App offen ist, dann sammelt sie selbst
-// nach. Öfter lohnt nicht: jeder Lauf fragt alle Quellen ab, und die meisten melden
-// ohnehin nur tageweise.
-const AUTO_MS = 15 * 60 * 1000;
-// In diesem Takt fragt die offene App, ob auf dem Server etwas Neues liegt. Nötig, weil
-// der geplante Sammellauf (GitHub Actions, auch die schweren Quellen) dort Zahlen
-// schreibt, von denen die App sonst bis zum nächsten Tippen nichts wüsste. Gefragt wird
-// nur nach dem Zeitstempel (/api/stand, ein Schlüssel im Speicher); den ganzen Stand
-// holt sie erst, wenn er sich geändert hat.
-const PRUEF_MS = 60 * 1000;
+// nach - die leichten Quellen, die schweren holt der Actions-Lauf. Deutlich kürzer
+// lohnt nicht: AdMob und AdSense melden nur ein paar Mal am Tag, jeder Abruf zählt
+// aber in deren Tageskontingent.
+const AUTO_MS = 5 * 60 * 1000;
+// Takt der Frage „liegt auf dem Server etwas Neues?" (/api/stand, ein Zeitstempel).
+// Nötig, weil der geplante Sammellauf - und ein zweites Gerät - dort Zahlen schreiben,
+// von denen diese App sonst bis zum nächsten Tippen nichts wüsste. Kurz, solange
+// jemand hinsieht; ruhiger, wenn der Tab nur offen steht. Kontingente, die das
+// begrenzen: 100.000 Worker-Aufrufe am Tag und die Befehle des Speichers - deshalb
+// kostet eine Frage genau einen Befehl und der ganze Stand kommt nur bei Änderung.
+const SCHNELL_MS = 15 * 1000;
+const RUHE_MS = 60 * 1000;
+const AKTIV_MS = 10 * 60 * 1000; // so lange nach der letzten Eingabe gilt „sieht hin"
+const TICK_MS = 5 * 1000;        // Herzschlag; gefragt wird erst, wenn der Takt es zulässt
 
 const veraltet = (s) => !s?.collectedAt || Date.now() - Date.parse(s.collectedAt) >= AUTO_MS;
 // Wie im Server: der Tag, nach dem „heute" und „gestern" gerechnet werden (UTC).
 const heute = () => new Date().toISOString().slice(0, 10);
+// Woran die App merkt, dass jemand davor sitzt - und nicht, dass ein Tab offen steht.
+const EINGABEN = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
 
 const rechtsLink = (basis, pfad) => `${basis || (NATIV ? getServer() : '')}/${pfad}`;
 
@@ -187,8 +194,11 @@ export default function App() {
     laeuft.current = true;
     if (auto) setStill(true); else { setBusy(true); setError(null); }
     try {
-      await api('/api/collect', { method: 'POST' });
+      const r = await api('/api/collect', { method: 'POST' });
       await load();
+      // Ein anderer Lauf war schon unterwegs (der geplante oder ein zweites Gerät).
+      // Kein Fehler, aber ohne Hinweis sähe es aus, als hätte das Tippen nichts getan.
+      if (r?.laeuft && !auto) setFlash('Ein Sammellauf läuft gerade – die neuen Zahlen erscheinen von selbst.');
     } catch (e) {
       if (e.status === 401) abgemeldet();
       // Ohne Netz im Hintergrund nicht jede Viertelstunde eine rote Zeile zeigen;
@@ -233,7 +243,7 @@ export default function App() {
     load().then((s) => { if (s && veraltet(s)) collect({ auto: true }); });
   }, [authed, load, collect]);
 
-  // Von selbst aktuell bleiben: jede Minute fragen, ob der Server neuer ist als die
+  // Von selbst aktuell bleiben: alle SCHNELL_MS fragen, ob der Server neuer ist als die
   // Anzeige, und beim Zurückkommen in App oder Tab sofort nachladen. Ist der Server
   // neuer - etwa nach dem geplanten Sammellauf -, kommt der volle Stand. Hat auch er
   // nichts Neues und sind die Zahlen über AUTO_MS alt, sammelt die App selbst. Im
@@ -241,12 +251,17 @@ export default function App() {
   useEffect(() => {
     if (!authed) return undefined;
     let zuletzt = 0;
+    let aktiv = Date.now();
     let tag = heute();
     let offen = false; // auf langsamem Netz nicht zwei Prüfungen übereinander stapeln
     const pruefe = async ({ rueckkehr = false } = {}) => {
       if (offen || document.hidden || navigator.onLine === false || laeuft.current) return;
-      // App-Rückkehr und visibilitychange kommen auf dem Telefon beide - einmal reicht.
-      if (Date.now() - zuletzt < 2000) return;
+      // Beim Zurückkommen sofort - dort bremsen nur 2 Sekunden, weil App-Rückkehr und
+      // visibilitychange auf dem Telefon beide kommen. Sonst im Takt, und der halbe
+      // Herzschlag Toleranz verhindert, dass eine knapp zu frühe Prüfung eine ganze
+      // Runde aussetzt.
+      const abstand = rueckkehr ? 2000 : (Date.now() - aktiv < AKTIV_MS ? SCHNELL_MS : RUHE_MS) - TICK_MS / 2;
+      if (Date.now() - zuletzt < abstand) return;
       zuletzt = Date.now();
       offen = true;
       try {
@@ -258,8 +273,9 @@ export default function App() {
         let neu = rueckkehr || tagwechsel || !s;
         if (!neu) {
           const stand = await api('/api/stand').catch((e) => {
-            // Ohne Netz oder bei einem Serverfehler still bleiben, sonst stünde jede
-            // Minute eine rote Zeile da; nur eine abgelaufene Sitzung muss auffallen.
+            // Ohne Netz oder bei einem Serverfehler still bleiben, sonst stünde in
+            // diesem Takt dauernd eine rote Zeile da; nur eine abgelaufene Sitzung
+            // muss auffallen.
             if (e.status === 401) abgemeldet();
             return null;
           });
@@ -275,15 +291,18 @@ export default function App() {
         offen = false;
       }
     };
-    const zurueck = () => pruefe({ rueckkehr: true });
-    const t = setInterval(pruefe, PRUEF_MS);
+    const zurueck = () => { aktiv = Date.now(); pruefe({ rueckkehr: true }); };
+    const aktivitaet = () => { aktiv = Date.now(); };
+    const t = setInterval(pruefe, TICK_MS);
     document.addEventListener('visibilitychange', zurueck);
     window.addEventListener('online', zurueck);
+    for (const e of EINGABEN) window.addEventListener(e, aktivitaet, { passive: true });
     const weg = beiRueckkehr(zurueck);
     return () => {
       clearInterval(t);
       document.removeEventListener('visibilitychange', zurueck);
       window.removeEventListener('online', zurueck);
+      for (const e of EINGABEN) window.removeEventListener(e, aktivitaet);
       weg();
     };
   }, [authed, load, collect, abgemeldet]);

@@ -36,6 +36,12 @@ Ort, an dem Fehler im Client auffallen, es gibt keinen Typprüfer und kein Linti
   Warten auf Netz nicht. Schwere Quellen tragen `meta.schwer` und laufen nur im
   Actions-Sammellauf; Passwörter nutzen scrypt N=2048. Einzelheiten in `docs/CLOUDFLARE.md`.
 
+- **Nie zwei Sammelläufe gleichzeitig je Konto.** Beide lesen den Verlauf, mischen ihre
+  Zahlen hinein und speichern - der spätere überschreibt den früheren. Seit die offene
+  App alle fünf Minuten und der Actions-Lauf alle 15 Minuten sammeln, treffen sie sich
+  regelmäßig. `runCollect` hält deshalb eine Sperre mit Verfall (`u:<id>:sperre`); wer
+  sie nicht bekommt, ändert nichts und meldet `laeuft`.
+
 - **Eine einzige Vercel-Funktion.** Der Hobby-Tarif erlaubt zwölf pro Deployment, je
   Endpunkt eine Datei wären neunzehn. `vercel.json` leitet alles auf `api/index.js` um.
   Neue Endpunkte kommen nach `server/routen.js`, nicht als neue Datei in `api/`.

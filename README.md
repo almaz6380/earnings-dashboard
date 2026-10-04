@@ -142,11 +142,14 @@ Die Meldung geht nur beim Cron-Lauf raus, nicht beim Klick auf „Aktualisieren�
 - **Umrechnung** mit dem aktuellen EZB-Kurs (Tages-Cache). Währungen, die die EZB nicht führt, werden angezeigt,
   aber nicht summiert.
 - **Verzug:** AdMob und AdSense 1–2 Tage, Apple Sales 1 Tag, Play und Apple Finance monatlich.
-- **Frisch ohne Zutun:** Die geöffnete App fragt jede Minute, ob auf dem Server neu gesammelt wurde (`/api/stand`,
-  nur ein Zeitstempel), und lädt dann von selbst nach – der geplante Sammellauf erscheint also ohne „Aktualisieren“.
-  Liegt auf dem Server auch nichts Neueres und sind die Zahlen über 15 Minuten alt, sammelt die App selbst die
-  leichten Quellen. Beim Zurückkommen in App oder Tab und nach Mitternacht lädt sie sofort. „Aktualisieren“ und
-  Runterziehen bleiben als Weg, es sofort zu erzwingen.
+- **Frisch ohne Zutun:** Die geöffnete App fragt alle 15 Sekunden, ob auf dem Server neu gesammelt wurde
+  (`/api/stand`, nur ein Zeitstempel in einem Speicher-Befehl), und lädt dann von selbst nach – neue Zahlen
+  erscheinen also ohne „Aktualisieren“. Steht der Tab bloß offen, ohne Eingabe seit 10 Minuten, genügt ein Takt
+  von einer Minute. Liegt auf dem Server nichts Neueres und sind die Zahlen über 5 Minuten alt, sammelt die App
+  selbst die leichten Quellen (RevenueCat, AdMob, AdSense, Wise, PayPal); die schweren holt der geplante Lauf in
+  GitHub Actions alle 15 Minuten. Beim Zurückkommen in App oder Tab und nach Mitternacht lädt sie sofort.
+  „Aktualisieren“ und Runterziehen bleiben als Weg, es sofort zu erzwingen. Zwei Läufe gleichzeitig kann es nicht
+  geben: wer die Sperre nicht bekommt, ändert nichts, und sein Ergebnis zeigt die App ohnehin von selbst.
 - **Verlauf:** Tageswerte 2 Jahre, Kontostand-Snapshots 1 Jahr, alles in `history` im Speicher.
 - **Aufschlüsselung nach Apps** (Tab „Apps“): AdMob liefert sie je App, RevenueCat je Projekt, App Store Connect
   je Titel, Google Play je Produkt. AdSense bleibt außen vor – das sind Webseiten, keine Apps. Gleiche App-Namen

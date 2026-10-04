@@ -11,7 +11,7 @@ export const MIN_PW = 10;
 export const normEmail = (e) => String(e || '').trim().toLowerCase();
 export const emailOk = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e) && e.length <= 254;
 
-const userKey = (id) => `user:${id}`;
+export const userKey = (id) => `user:${id}`;
 const emailKey = (email) => `email:${normEmail(email)}`;
 // Datei- bzw. Zeilenschlüssel für Nutzerdaten. Lokal wird ":" zu "_" - das macht store.js.
 export const ukey = (id, name) => `u:${id}:${name}`;

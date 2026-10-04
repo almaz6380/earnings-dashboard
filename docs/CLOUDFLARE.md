@@ -21,7 +21,7 @@ verbunden werden. Konto und Verlauf liegen unverschlüsselt in Redis und sind er
 | Seiten und App-Dateien | Cloudflare Static Assets aus `client/dist` | wecken den Worker nicht, kosten nichts |
 | „Aktualisieren“ in der App | Worker, **nur leichte Quellen** | Workers Free: 10 ms CPU je Aufruf |
 | Geplanter Sammellauf, alle Quellen | GitHub Actions, `.github/workflows/sammeln.yml`, stündlich | App Store und Play brauchen mehr als 10 ms CPU |
-| „Liegt Neues vor?“ aus der offenen App | Worker, `/api/stand` | ein Zeitstempel aus dem Speicher, damit der Minutentakt nichts kostet |
+| „Liegt Neues vor?“ aus der offenen App | Worker, `/api/stand`, alle 15 s | ein Zeitstempel in einem Speicher-Befehl, damit der kurze Takt tragbar bleibt |
 | Speicher | derselbe Upstash-Redis wie vorher | nichts umzuziehen |
 
 Veröffentlicht wird automatisch bei jedem Push auf `main`
@@ -38,10 +38,17 @@ Worker-Secrets zu Cloudflare.
 - **Sammeln nie in den Worker zurückholen.** Ein Cron-Trigger im Worker hätte dieselbe
   10-ms-Grenze.
 - **Was die offene App im Takt fragt, muss `/api/stand` bleiben.** Die Oberfläche fragt
-  jede Minute nach dem Zeitstempel des letzten Laufs und lädt `/api/state` nur, wenn er
-  sich geändert hat. `/api/state` im Minutentakt wäre beides zu teuer: es baut die
-  Zusammenfassung über zwei Jahre Verlauf neu (CPU) und liest Verlauf und Kurse mit
-  (Redis-Befehle). Mit einem Konto und offener App sind es so rund 1500 Befehle am Tag.
+  alle 15 Sekunden nach dem Zeitstempel des letzten Laufs (alle 60 Sekunden, wenn der
+  Tab nur offen steht) und lädt `/api/state` nur, wenn er sich geändert hat.
+  `/api/state` in diesem Takt wäre beides zu teuer: es baut die Zusammenfassung über
+  zwei Jahre Verlauf neu (CPU) und liest Verlauf und Kurse mit (Speicher-Befehle).
+  `/api/stand` kostet einen einzigen Befehl: Konto und letzter Lauf kommen in einem
+  MGET, und geprüft wird nur das signierte Token.
+- **Die Kontingente, an denen der Takt hängt.** Cloudflare Workers Free: 100.000 Aufrufe
+  am Tag — der 15-Sekunden-Takt braucht höchstens 5.760. Upstash-Redis zählt Befehle:
+  ganztägig offene App rund 4.000–8.000 am Tag (Takt plus ein Sammellauf alle 5 Minuten
+  mit etwa sieben Befehlen). Beim Ändern der Takte (`SCHNELL_MS`, `RUHE_MS`, `AUTO_MS`
+  in `client/src/App.jsx`) zuerst im Upstash-Verbrauch nachsehen, was der Tarif erlaubt.
 - **`api/index.js` und `vercel.json` bleiben vorerst liegen.** Sie stören den Worker nicht
   und erlauben den Rückweg, falls Vercel je wieder gebraucht wird.
 

@@ -84,6 +84,35 @@ export async function loadJSON(name, fallback = null) {
   }
 }
 
+// Mehrere Schlüssel in einem Befehl lesen. Die offene App fragt im Sekundentakt nach
+// dem letzten Lauf und muss dafür auch das Konto prüfen; als zwei GET wären das zwei
+// Befehle im Kontingent des Speichers, als MGET ist es einer.
+export async function loadManyJSON(namen) {
+  if (!namen.length) return [];
+  if (useRedis()) {
+    const roh = await redis(['MGET', ...namen]);
+    return namen.map((_, i) => {
+      try { return JSON.parse(roh?.[i]); } catch { return null; }
+    });
+  }
+  // Ohne Redis einzeln: lokal sind es Dateien, und Supabase ist nicht der Takt-Betrieb.
+  return Promise.all(namen.map((n) => loadJSON(n)));
+}
+
+// Kurze Schreibsperre mit Verfall. true heißt: bekommen, es läuft kein zweiter.
+// Nur mit Redis, denn nur dort treffen mehrere Läufe aufeinander (Worker und
+// Actions-Sammellauf sprechen denselben Speicher). Lokal läuft ein Prozess, mit
+// Supabase gibt es kein SETNX - dort gibt es die Sperre nicht und sie meldet true.
+export async function sperreSetzen(name, sekunden) {
+  if (!useRedis()) return true;
+  return (await redis(['SET', name, new Date().toISOString(), 'NX', 'EX', sekunden])) != null;
+}
+
+export async function sperreLoesen(name) {
+  if (!useRedis()) return;
+  await redis(['DEL', name]);
+}
+
 export async function saveJSON(name, value) {
   if (useRedis()) {
     await redis(['SET', name, JSON.stringify(value)]);

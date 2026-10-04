@@ -18,9 +18,13 @@ if (cmd === 'collect') {
   if (rest[0]) {
     const u = await findByEmail(rest[0]);
     if (!u) { console.error(`Kein Konto für ${rest[0]}.`); process.exit(1); }
-    const { latest, summary } = await runCollect({ user: u, notify });
-    console.log(JSON.stringify(latest.results, null, 1));
-    console.log(`Gesamt gestern ${summary.kpis.yesterday} ${summary.baseCurrency} · 30 Tage ${summary.kpis.d30} ${summary.baseCurrency}`);
+    const { latest, summary, laeuft } = await runCollect({ user: u, notify });
+    if (laeuft) {
+      console.log(`Ein anderer Sammellauf ist gerade unterwegs (seit ${latest?.collectedAt || 'unbekannt'}), nichts geändert.`);
+    } else {
+      console.log(JSON.stringify(latest.results, null, 1));
+      console.log(`Gesamt gestern ${summary.kpis.yesterday} ${summary.baseCurrency} · 30 Tage ${summary.kpis.d30} ${summary.baseCurrency}`);
+    }
   } else {
     console.log(JSON.stringify(await runCollectAll({ notify, budgetMs: 10 * 60 * 1000 }), null, 1));
   }

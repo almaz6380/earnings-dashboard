@@ -1,6 +1,6 @@
 // Ein Sammellauf je Konto: alle eingerichteten Quellen abrufen, in den Verlauf mischen,
 // Zusammenfassung speichern. Fehler einer Quelle blockieren die anderen nicht.
-import { loadJSON, saveJSON } from './store.js';
+import { loadJSON, saveJSON, sperreSetzen, sperreLoesen } from './store.js';
 import { getRates, normBase, round2 } from './fx.js';
 import { SOURCES } from './sources/index.js';
 import { buildSummary } from './summary.js';
@@ -64,6 +64,27 @@ export function zugaenge(u, src, eintrag) {
 export async function runCollect({ user, userId, notify = true, nurLeicht = false } = {}) {
   const u = user || (await getUser(userId));
   if (!u) throw new Error('Konto nicht gefunden.');
+  // Zwei Läufe gleichzeitig verlieren einander Daten: beide lesen den Verlauf, mischen
+  // ihre Zahlen hinein und speichern - der spätere überschreibt den früheren. Seit die
+  // offene App alle AUTO_MS und der Actions-Lauf alle 15 Minuten sammeln, treffen sie
+  // sich regelmäßig. Also schreibt nur, wer die Sperre bekommt; der andere liefert den
+  // gespeicherten Stand und meldet `laeuft`. Die App zeigt das Ergebnis des laufenden
+  // Sammellaufs ohnehin von selbst, sobald er fertig ist (/api/stand).
+  // Die Haltezeit deckt den jeweiligen Lauf ab: der leichte ist in Sekunden fertig,
+  // der vollständige darf bis zum Zeitlimit des Workflows brauchen. Läuft etwas davon
+  // ins Leere, verfällt die Sperre von selbst.
+  const sKey = ukey(u.id, 'sperre');
+  if (!(await sperreSetzen(sKey, nurLeicht ? 120 : 900))) {
+    return { latest: await loadJSON(ukey(u.id, 'latest')), summary: null, laeuft: true };
+  }
+  try {
+    return await sammeln(u, { notify, nurLeicht });
+  } finally {
+    await sperreLoesen(sKey);
+  }
+}
+
+async function sammeln(u, { notify, nurLeicht }) {
   const started = Date.now();
   const cfg = konfiguration(u);
   const base = baseOf(u);
@@ -147,7 +168,7 @@ export async function runCollectAll({ notify = true, budgetMs = 50_000, minAlter
     konten.push({ id, latest, last: latest?.collectedAt ? Date.parse(latest.collectedAt) : 0 });
   }
   konten.sort((a, b) => a.last - b.last);
-  const out = { konten: konten.length, gelaufen: 0, fehler: 0, offen: 0, frisch: 0, ms: 0 };
+  const out = { konten: konten.length, gelaufen: 0, fehler: 0, offen: 0, frisch: 0, gesperrt: 0, ms: 0 };
   const heute = new Date(now).toISOString().slice(0, 10);
   for (const k of konten) {
     // Wer heute noch eine Meldung bekommt, läuft trotzdem, sonst fiele sie aus, nur weil
@@ -155,8 +176,12 @@ export async function runCollectAll({ notify = true, budgetMs = 50_000, minAlter
     const meldetNoch = notify && !schonGemeldet(k.latest, heute);
     if (now - k.last < minAlterMs && !meldetNoch) { out.frisch++; continue; }
     if (Date.now() - now > budgetMs) { out.offen++; continue; }
-    try { await runCollect({ userId: k.id, notify, nurLeicht }); out.gelaufen++; }
-    catch (e) { out.fehler++; console.error(`Sammellauf ${k.id}: ${e.message}`); }
+    // Hielt die offene App gerade die Sperre, kommt dieses Konto beim nächsten Lauf
+    // dran - auch die Tagesmeldung, denn gemeldetAm bleibt dann ungesetzt.
+    try {
+      const { laeuft } = await runCollect({ userId: k.id, notify, nurLeicht });
+      if (laeuft) out.gesperrt++; else out.gelaufen++;
+    } catch (e) { out.fehler++; console.error(`Sammellauf ${k.id}: ${e.message}`); }
   }
   out.ms = Date.now() - now;
   return out;

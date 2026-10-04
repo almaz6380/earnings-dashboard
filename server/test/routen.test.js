@@ -149,7 +149,7 @@ test('/api/health meldet Namen als ja/nein und nie einen Wert', async () => {
   }
 });
 
-test('/api/stand nennt nur den Zeitstempel, damit der Minutentakt der App billig bleibt', async () => {
+test('/api/stand nennt nur den Zeitstempel und kostet einen einzigen Befehl', async () => {
   const alt = { url: process.env.KV_REST_API_URL, tok: process.env.KV_REST_API_TOKEN, f: globalThis.fetch };
   process.env.KV_REST_API_URL = 'https://redis.example';
   process.env.KV_REST_API_TOKEN = 'geheim';
@@ -159,9 +159,11 @@ test('/api/stand nennt nur den Zeitstempel, damit der Minutentakt der App billig
   ]);
   let gelesen = [];
   globalThis.fetch = async (_url, init) => {
-    const [cmd, key] = JSON.parse(init.body);
-    gelesen.push(`${cmd} ${key}`);
-    return new Response(JSON.stringify({ result: cmd === 'GET' ? daten.get(key) ?? null : null }), {
+    const [cmd, ...schluessel] = JSON.parse(init.body);
+    gelesen.push(`${cmd} ${schluessel.join(' ')}`);
+    const result = cmd === 'MGET' ? schluessel.map((k) => daten.get(k) ?? null)
+      : cmd === 'GET' ? daten.get(schluessel[0]) ?? null : null;
+    return new Response(JSON.stringify({ result }), {
       status: 200, headers: { 'content-type': 'application/json' },
     });
   };
@@ -175,9 +177,9 @@ test('/api/stand nennt nur den Zeitstempel, damit der Minutentakt der App billig
     assert.equal(res.code, 200);
     assert.deepEqual(res.body, { collectedAt: '2026-10-04T08:17:00.000Z' });
     assert.equal(res.headers['cache-control'], 'no-store');
-    // Zwei Schlüssel, keine Zusammenfassung: sonst kostet jede Minute mit offener App
-    // CPU im Worker und Befehle im Speicher.
-    assert.deepEqual(gelesen, ['GET user:u1', 'GET u:u1:latest']);
+    // Ein einziger Befehl für Konto und Lauf, keine Zusammenfassung: sonst kostet der
+    // Takt der offenen App CPU im Worker und Befehle im Speicher.
+    assert.deepEqual(gelesen, ['MGET user:u1 u:u1:latest']);
 
     // Noch nie gesammelt: null statt Fehler - die App sammelt dann selbst.
     daten.delete('u:u1:latest');
@@ -191,6 +193,12 @@ test('/api/stand nennt nur den Zeitstempel, damit der Minutentakt der App billig
     await stand({ method: 'GET', headers: {} }, ohne);
     assert.equal(ohne.code, 401);
     assert.deepEqual(gelesen, []);
+
+    // Nach einem Passwortwechsel (neue pwv) erfährt ein altes Token auch hier nichts.
+    daten.set('user:u1', JSON.stringify({ id: 'u1', email: 'a@example.com', pwv: 2 }));
+    const alt2 = fakeRes();
+    await stand({ method: 'GET', headers: kopf }, alt2);
+    assert.equal(alt2.code, 401);
   } finally {
     globalThis.fetch = alt.f;
     if (alt.url === undefined) delete process.env.KV_REST_API_URL; else process.env.KV_REST_API_URL = alt.url;

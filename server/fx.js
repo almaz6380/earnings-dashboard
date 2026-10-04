@@ -10,16 +10,24 @@ export function normBase(cur) {
   return BASES.includes(c) ? c : DEFAULT_BASE();
 }
 
+// Kurse eines Tages aendern sich nicht mehr. Wer sie in diesem Prozess schon geholt
+// hat, fragt den Speicher nicht erneut - das sparen die haeufigen Sammellaeufe der
+// offenen App, deren Befehle im Kontingent des Speichers zaehlen. Der Schluessel
+// enthaelt das Datum, es kann also nichts Altes hervorkommen.
+const imKopf = new Map();
+
 export async function getRates(base = DEFAULT_BASE(), dateStr = new Date().toISOString().slice(0, 10)) {
   const b = normBase(base);
   const key = b === 'EUR' ? `fx:${dateStr}` : `fx:${b}:${dateStr}`;
+  if (imKopf.has(key)) return imKopf.get(key);
   const cached = await loadJSON(key);
-  if (cached?.rates) return cached;
+  if (cached?.rates) { imKopf.set(key, cached); return cached; }
   const res = await fetch(`https://api.frankfurter.app/latest?from=${b}`);
   if (!res.ok) throw new Error(`Wechselkurse: ${res.status}`);
   const data = await res.json();
   const out = { base: b, date: data.date, rates: { ...data.rates, [b]: 1 } };
   await saveJSON(key, out);
+  imKopf.set(key, out);
   return out;
 }
 
