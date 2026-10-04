@@ -171,6 +171,7 @@ export default function App() {
 
   const stateRef = useRef(null);
   const laeuft = useRef(false);
+  const stillerVersuch = useRef(0);
 
   const abgemeldet = useCallback(() => { setAuthed(false); if (NATIV) setToken(null); }, []);
 
@@ -191,6 +192,13 @@ export default function App() {
   // schon unterwegs ist, wird der nur sichtbar gemacht statt ein zweiter gestartet.
   const collect = useCallback(async ({ auto = false } = {}) => {
     if (laeuft.current) { if (!auto) setBusy(true); return; }
+    // Still sammeln höchstens alle AUTO_MS, und zwar unabhängig davon, wie der Lauf
+    // ausgeht. Bleibt der Stand stehen - weil der Server gerade sperrt, eine Quelle
+    // hängt oder das Netz weg ist -, gelten die Zahlen weiter als veraltet, und ohne
+    // diese Bremse versuchte die App es im Takt der Prüfung wieder, also alle 15
+    // Sekunden. Von Hand bremst nichts: wer tippt, will es jetzt.
+    if (auto && Date.now() - stillerVersuch.current < AUTO_MS) return;
+    if (auto) stillerVersuch.current = Date.now();
     laeuft.current = true;
     if (auto) setStill(true); else { setBusy(true); setError(null); }
     try {
@@ -201,7 +209,7 @@ export default function App() {
       if (r?.laeuft && !auto) setFlash('Ein Sammellauf läuft gerade – die neuen Zahlen erscheinen von selbst.');
     } catch (e) {
       if (e.status === 401) abgemeldet();
-      // Ohne Netz im Hintergrund nicht jede Viertelstunde eine rote Zeile zeigen;
+      // Ohne Netz im Hintergrund nicht alle paar Minuten eine rote Zeile zeigen;
       // der nächste sichtbare Versuch meldet es dann.
       else if (!auto || e.status !== 0) setError(e.message);
     } finally {
@@ -327,6 +335,7 @@ export default function App() {
     if (!still) await api('/api/logout', { method: 'POST' }).catch(() => {});
     if (NATIV) await setToken(null);
     stateRef.current = null;
+    stillerVersuch.current = 0; // nach einer neuen Anmeldung sofort wieder sammeln dürfen
     setAuthed(false); setState(null); setStatus(null); setError(null); setTab('uebersicht');
   }
 

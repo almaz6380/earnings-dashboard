@@ -27,6 +27,9 @@ export async function getRates(base = DEFAULT_BASE(), dateStr = new Date().toISO
   const data = await res.json();
   const out = { base: b, date: data.date, rates: { ...data.rates, [b]: 1 } };
   await saveJSON(key, out);
+  // Ein Worker-Isolat lebt Stunden; ohne diese Schranke sammelte sich je Tag und
+  // Basiswährung ein Eintrag an. Vergessen kostet nur einen Lesevorgang.
+  if (imKopf.size > 8) imKopf.clear();
   imKopf.set(key, out);
   return out;
 }
