@@ -58,6 +58,11 @@ html {
   color-scheme: dark;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  /* Das eigene Runterziehen des Browsers abschalten. Es muss hier stehen, nicht nur
+     am body: nur der Wert des Wurzelelements gilt für die Sichtfläche. Fehlte er,
+     gewann beim Runterziehen die Seiten-Neuladung des Browsers - kurz schwarzer
+     Bildschirm, und der Sammellauf, den die Geste auslösen sollte, kam nie. */
+  overscroll-behavior-y: contain;
 }
 
 body {
