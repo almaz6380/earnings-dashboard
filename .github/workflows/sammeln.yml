@@ -31,6 +31,16 @@ on:
     - cron: '7,22,37,52 4-21 * * *'
   workflow_dispatch:
 
+# Was der Zeitplan verspricht, haelt GitHub nicht: gemessen am 05.10.2026 liefen in
+# fuenf Tagen 17 von rund 90 geplanten Laeufen, in Abstaenden von drei bis fuenf
+# Stunden und zu beliebigen Minuten - geplante Laeufe haben keine Zusage, GitHub
+# verzoegert und verwirft sie unter Last. Ein kuerzerer Zeitplan hilft dagegen nicht.
+# Verlaesslich frisch sind deshalb nur die leichten Quellen, die die offene App selbst
+# holt (AUTO_MS in client/src/App.jsx). App Store und Google Play haengen an diesem
+# Lauf; sie melden tageweise, der heutige Stand haengt also nicht an ihnen.
+# Soll es verlaesslich sein, muss der Lauf von aussen angestossen werden
+# (workflow_dispatch mit einem Token), nicht vom Zeitplan - siehe docs/CLOUDFLARE.md.
+
 concurrency:
   # Zwei Laeufe gleichzeitig wuerden einander den Verlauf ueberschreiben.
   group: sammeln

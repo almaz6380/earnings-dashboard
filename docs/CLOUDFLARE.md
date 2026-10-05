@@ -44,6 +44,14 @@ Worker-Secrets zu Cloudflare.
   zwei Jahre Verlauf neu (CPU) und liest Verlauf und Kurse mit (Speicher-Befehle).
   `/api/stand` kostet einen einzigen Befehl: Konto und letzter Lauf kommen in einem
   MGET, und geprüft wird nur das signierte Token.
+- **Auf GitHubs Zeitplan ist kein Verlass.** Gemessen am 05.10.2026: 17 von rund 90
+  geplanten Sammelläufen in fünf Tagen, Abstände von drei bis fünf Stunden, Minuten
+  beliebig. GitHub sagt für `schedule` keine Zeit zu und verwirft Läufe unter Last; ein
+  kürzerer Zeitplan ändert daran nichts. Frisch bleiben darum nur die leichten Quellen,
+  die die offene App selbst holt. Wer App Store und Play verlässlich aktuell braucht,
+  muss den Lauf von außen anstoßen — `workflow_dispatch` über die GitHub-API mit einem
+  feingranularen Token (Actions: write, nur dieses Repository), etwa aus dem Worker beim
+  Tippen auf „Aktualisieren“ oder von cron-job.org. Ohne Token bleibt es beim Zeitplan.
 - **Die Kontingente, an denen der Takt hängt.** Cloudflare Workers Free: 100.000 Aufrufe
   am Tag — der 15-Sekunden-Takt braucht höchstens 5.760. Upstash-Redis zählt Befehle:
   ganztägig offene App rund 4.000–8.000 am Tag (Takt plus ein Sammellauf alle 5 Minuten

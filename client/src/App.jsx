@@ -41,6 +41,8 @@ const veraltet = (s) => !s?.collectedAt || Date.now() - Date.parse(s.collectedAt
 const heute = () => new Date().toISOString().slice(0, 10);
 // Woran die App merkt, dass jemand davor sitzt - und nicht, dass ein Tab offen steht.
 const EINGABEN = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+// Woran sie merkt, dass sie wieder im Vordergrund ist (siehe Kommentar unten).
+const RUECKKEHR = ['pageshow', 'focus', 'online'];
 
 const rechtsLink = (basis, pfad) => `${basis || (NATIV ? getServer() : '')}/${pfad}`;
 
@@ -302,14 +304,18 @@ export default function App() {
     const zurueck = () => { aktiv = Date.now(); pruefe({ rueckkehr: true }); };
     const aktivitaet = () => { aktiv = Date.now(); };
     const t = setInterval(pruefe, TICK_MS);
+    // Mehrere Wege, weil keiner allein reicht: visibilitychange meldet den Tabwechsel,
+    // bleibt auf dem iPhone aber aus, wenn die Seite aus dem Seiten-Zwischenspeicher
+    // zurückkommt (pageshow) oder nur das Fenster wieder den Fokus bekommt (focus).
+    // Doppelt gemeldet schadet nicht: die zwei Sekunden Bremse in pruefe fangen das ab.
+    for (const e of RUECKKEHR) window.addEventListener(e, zurueck);
     document.addEventListener('visibilitychange', zurueck);
-    window.addEventListener('online', zurueck);
     for (const e of EINGABEN) window.addEventListener(e, aktivitaet, { passive: true });
     const weg = beiRueckkehr(zurueck);
     return () => {
       clearInterval(t);
+      for (const e of RUECKKEHR) window.removeEventListener(e, zurueck);
       document.removeEventListener('visibilitychange', zurueck);
-      window.removeEventListener('online', zurueck);
       for (const e of EINGABEN) window.removeEventListener(e, aktivitaet);
       weg();
     };
