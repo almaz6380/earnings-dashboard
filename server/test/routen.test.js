@@ -148,3 +148,60 @@ test('/api/health meldet Namen als ja/nein und nie einen Wert', async () => {
     if (alt.g === undefined) delete process.env.GOOGLE_CLIENT_ID; else process.env.GOOGLE_CLIENT_ID = alt.g;
   }
 });
+
+test('/api/stand nennt nur den Zeitstempel und kostet einen einzigen Befehl', async () => {
+  const alt = { url: process.env.KV_REST_API_URL, tok: process.env.KV_REST_API_TOKEN, f: globalThis.fetch };
+  process.env.KV_REST_API_URL = 'https://redis.example';
+  process.env.KV_REST_API_TOKEN = 'geheim';
+  const daten = new Map([
+    ['user:u1', JSON.stringify({ id: 'u1', email: 'a@example.com', pwv: 1 })],
+    ['u:u1:latest', JSON.stringify({ collectedAt: '2026-10-04T08:17:00.000Z', ms: 4210, results: { admob: { status: 'ok' } } })],
+  ]);
+  let gelesen = [];
+  globalThis.fetch = async (_url, init) => {
+    const [cmd, ...schluessel] = JSON.parse(init.body);
+    gelesen.push(`${cmd} ${schluessel.join(' ')}`);
+    const result = cmd === 'MGET' ? schluessel.map((k) => daten.get(k) ?? null)
+      : cmd === 'GET' ? daten.get(schluessel[0]) ?? null : null;
+    return new Response(JSON.stringify({ result }), {
+      status: 200, headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const { default: stand } = await import('../handlers/stand.js');
+    const { makeToken } = await import('../auth.js');
+    const kopf = { authorization: `Bearer ${makeToken({ id: 'u1', pwv: 1 })}` };
+
+    const res = fakeRes();
+    await stand({ method: 'GET', headers: kopf }, res);
+    assert.equal(res.code, 200);
+    assert.deepEqual(res.body, { collectedAt: '2026-10-04T08:17:00.000Z' });
+    assert.equal(res.headers['cache-control'], 'no-store');
+    // Ein einziger Befehl für Konto und Lauf, keine Zusammenfassung: sonst kostet der
+    // Takt der offenen App CPU im Worker und Befehle im Speicher.
+    assert.deepEqual(gelesen, ['MGET user:u1 u:u1:latest']);
+
+    // Noch nie gesammelt: null statt Fehler - die App sammelt dann selbst.
+    daten.delete('u:u1:latest');
+    const leer = fakeRes();
+    await stand({ method: 'GET', headers: kopf }, leer);
+    assert.deepEqual(leer.body, { collectedAt: null });
+
+    // Ohne Sitzung 401, und ohne jeden Speicherzugriff.
+    gelesen = [];
+    const ohne = fakeRes();
+    await stand({ method: 'GET', headers: {} }, ohne);
+    assert.equal(ohne.code, 401);
+    assert.deepEqual(gelesen, []);
+
+    // Nach einem Passwortwechsel (neue pwv) erfährt ein altes Token auch hier nichts.
+    daten.set('user:u1', JSON.stringify({ id: 'u1', email: 'a@example.com', pwv: 2 }));
+    const alt2 = fakeRes();
+    await stand({ method: 'GET', headers: kopf }, alt2);
+    assert.equal(alt2.code, 401);
+  } finally {
+    globalThis.fetch = alt.f;
+    if (alt.url === undefined) delete process.env.KV_REST_API_URL; else process.env.KV_REST_API_URL = alt.url;
+    if (alt.tok === undefined) delete process.env.KV_REST_API_TOKEN; else process.env.KV_REST_API_TOKEN = alt.tok;
+  }
+});

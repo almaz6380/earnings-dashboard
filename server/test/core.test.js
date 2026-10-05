@@ -477,6 +477,90 @@ test('Redis-Speicher: schreiben, lesen, nach Präfix auflisten, löschen', async
   assert.equal(speicher.useRedis(), false, 'nach dem Test wieder der lokale Speicher');
 });
 
+// Ein Redis im Speicher mit NX/EX und MGET - damit laesst sich pruefen, dass zwei
+// gleichzeitige Sammellaeufe einander nicht ueberschreiben.
+function redisAttrappe(daten = new Map()) {
+  const befehle = [];
+  const fetchAlt = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
+    if (!String(url).startsWith('https://redis.example')) {
+      // Die Wechselkurse holt der Sammellauf per Netz; hier ein fester Kurs.
+      return new Response(JSON.stringify({ date: '2026-10-04', rates: { USD: 1.1 } }), {
+        status: 200, headers: { 'content-type': 'application/json' },
+      });
+    }
+    const [cmd, ...args] = JSON.parse(init.body);
+    befehle.push([cmd, ...args].join(' '));
+    let result = null;
+    if (cmd === 'GET') result = daten.get(args[0]) ?? null;
+    else if (cmd === 'MGET') result = args.map((k) => daten.get(k) ?? null);
+    else if (cmd === 'DEL') { daten.delete(args[0]); result = 1; }
+    else if (cmd === 'SET') {
+      const nx = args.includes('NX');
+      if (nx && daten.has(args[0])) result = null;
+      else { daten.set(args[0], args[1]); result = 'OK'; }
+    }
+    return new Response(JSON.stringify({ result }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  return { daten, befehle, zurueck: () => { globalThis.fetch = fetchAlt; } };
+}
+
+test('Sperre: nur einer bekommt sie, und sie laesst sich wieder loesen', async () => {
+  const alt = { url: process.env.KV_REST_API_URL, tok: process.env.KV_REST_API_TOKEN };
+  process.env.KV_REST_API_URL = 'https://redis.example';
+  process.env.KV_REST_API_TOKEN = 'geheim';
+  const r = redisAttrappe();
+  try {
+    assert.equal(await speicher.sperreSetzen('u:u1:sperre', 120), true);
+    assert.equal(await speicher.sperreSetzen('u:u1:sperre', 120), false, 'der zweite Lauf darf nicht schreiben');
+    await speicher.sperreLoesen('u:u1:sperre');
+    assert.equal(await speicher.sperreSetzen('u:u1:sperre', 120), true);
+    // Ein Befehl fuer mehrere Schluessel - der Takt der offenen App haengt daran.
+    r.daten.set('a', JSON.stringify({ n: 1 }));
+    assert.deepEqual(await speicher.loadManyJSON(['a', 'fehlt']), [{ n: 1 }, null]);
+    assert.ok(r.befehle.includes('MGET a fehlt'));
+  } finally {
+    r.zurueck();
+    if (alt.url === undefined) delete process.env.KV_REST_API_URL; else process.env.KV_REST_API_URL = alt.url;
+    if (alt.tok === undefined) delete process.env.KV_REST_API_TOKEN; else process.env.KV_REST_API_TOKEN = alt.tok;
+  }
+});
+
+test('Zwei Sammellaeufe gleichzeitig: der zweite schreibt nicht, sondern meldet laeuft', async () => {
+  const alt = { url: process.env.KV_REST_API_URL, tok: process.env.KV_REST_API_TOKEN };
+  process.env.KV_REST_API_URL = 'https://redis.example';
+  process.env.KV_REST_API_TOKEN = 'geheim';
+  const r = redisAttrappe();
+  const u = { id: 'u1', email: 'a@example.com', settings: {} };
+  try {
+    const { runCollect } = await import('../collect.js');
+
+    // Ein Lauf ist schon unterwegs: Sperre liegt, der gespeicherte Stand bleibt stehen.
+    r.daten.set('u:u1:sperre', '2026-10-04T08:17:00.000Z');
+    r.daten.set('u:u1:latest', JSON.stringify({ collectedAt: '2026-10-04T08:17:00.000Z' }));
+    r.daten.set('u:u1:history', JSON.stringify({ daily: { admob: { '2026-10-03': { EUR: 5 } } } }));
+    const zweiter = await runCollect({ user: u, notify: false, nurLeicht: true });
+    assert.equal(zweiter.laeuft, true);
+    assert.equal(zweiter.summary, null);
+    assert.equal(zweiter.latest.collectedAt, '2026-10-04T08:17:00.000Z');
+    assert.ok(!r.befehle.some((b) => b.startsWith('SET u:u1:history')), 'der zweite Lauf darf den Verlauf nicht anfassen');
+
+    // Ohne fremde Sperre laeuft er, und raeumt seine eigene hinterher weg.
+    await speicher.deleteJSON('u:u1:sperre');
+    r.befehle.length = 0;
+    const erster = await runCollect({ user: u, notify: false, nurLeicht: true });
+    assert.equal(erster.laeuft, undefined);
+    assert.ok(erster.latest.collectedAt > '2026-10-04T08:17:00.000Z');
+    assert.ok(r.befehle.some((b) => b.startsWith('SET u:u1:sperre') && b.includes('NX')));
+    assert.ok(r.befehle.includes('DEL u:u1:sperre'), 'sonst blockiert ein Lauf alle folgenden bis zum Verfall');
+    assert.equal(await speicher.loadJSON('u:u1:sperre'), null);
+  } finally {
+    r.zurueck();
+    if (alt.url === undefined) delete process.env.KV_REST_API_URL; else process.env.KV_REST_API_URL = alt.url;
+    if (alt.tok === undefined) delete process.env.KV_REST_API_TOKEN; else process.env.KV_REST_API_TOKEN = alt.tok;
+  }
+});
+
 test('Meldung höchstens einmal am Tag', async () => {
   const { schonGemeldet } = await import('../collect.js');
   assert.equal(schonGemeldet(null, '2026-09-22'), false);

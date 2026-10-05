@@ -20,8 +20,10 @@ export default withCors(async function handler(req, res) {
     }
     const u = await currentUser(req);
     if (!u) return res.status(401).json({ fehler: 'Nicht angemeldet.' });
-    const { latest } = await runCollect({ user: u, notify: false, nurLeicht });
-    res.status(200).json(latest);
+    const { latest, laeuft } = await runCollect({ user: u, notify: false, nurLeicht });
+    // Läuft schon ein Sammellauf (Actions oder ein zweites Gerät), ist das kein Fehler:
+    // sein Ergebnis holt die App von selbst, sobald er fertig ist.
+    res.status(200).json(laeuft ? { ...latest, laeuft: true } : latest);
   } catch (e) {
     res.status(500).json({ fehler: e.message });
   }

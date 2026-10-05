@@ -161,8 +161,10 @@ ein externer Dienst, zum Beispiel [cron-job.org](https://cron-job.org) (kostenlo
 nach Mitternacht UTC mit einem halben Vortag.
 
 Konten, die in den letzten 30 Sekunden schon gesammelt wurden – meist von der offenen
-App –, überspringt der Lauf (`COLLECT_MIN_ALTER_MS`). Zwei gleichzeitige Läufe würden
-sonst denselben Verlauf laden und sich beim Speichern gegenseitig überschreiben.
+App –, überspringt der Lauf (`COLLECT_MIN_ALTER_MS`): ein zweiter Durchgang über
+dieselben Quellen bringt nichts Neues. Dass zwei Läufe einander beim Speichern
+überschreiben, kann ohnehin nicht passieren – `runCollect` hält je Konto eine Sperre mit
+Verfall, und wer sie nicht bekommt, ändert nichts (`gesperrt` in der Antwort).
 
 Was der Takt kostet, im Blick behalten: jeder Lauf fragt alle eingerichteten Quellen
 ab, also 96-mal am Tag je Konto. Öfter als alle 15 Minuten lohnt nicht: die meisten

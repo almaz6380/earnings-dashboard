@@ -17,10 +17,18 @@ name: Einnahmen sammeln
 
 on:
   schedule:
-    # Stuendlich von 06:17 bis 23:17 Wiener Sommerzeit, nachts nicht: Der erste Lauf
-    # des Tages verschickt die Tagesmeldung, und die soll morgens kommen, nicht um 2 Uhr.
-    # Nicht zur vollen Stunde - da staut GitHub die geplanten Laeufe.
-    - cron: '17 4-21 * * *'
+    # Alle 15 Minuten von 06:07 bis 23:52 Wiener Sommerzeit, nachts nicht: Der erste
+    # Lauf des Tages verschickt die Tagesmeldung, und die soll morgens kommen, nicht
+    # um 2 Uhr. Nicht zur vollen oder halben Stunde - da staut GitHub die geplanten
+    # Laeufe und sie kommen spaeter.
+    #
+    # Nicht kuerzer: Der Takt zahlt sich nur fuer die schweren Quellen aus, und die
+    # melden tageweise - App Store (Berichte), Google Play (ZIP im Finanzbericht).
+    # Haeufiger geholt liefern sie dieselben Zahlen, kosten aber jedes Mal einen
+    # mehrere Megabyte grossen Download und zaehlen in den Abruf-Grenzen von Apple
+    # und Google. Die schnellen Quellen (RevenueCat, Wise, PayPal) holt ohnehin die
+    # offene App selbst, alle paar Minuten (AUTO_MS in client/src/App.jsx).
+    - cron: '7,22,37,52 4-21 * * *'
   workflow_dispatch:
 
 concurrency:
