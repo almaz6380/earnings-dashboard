@@ -115,6 +115,25 @@ export default function Uebersicht({ s, onEinrichten }) {
 
   return (
     <>
+      {/* Reihenfolge nach der Frage beim Öffnen: heute, welche App heute was bringt, dann gestern und woraus es
+          besteht - erst danach die Zeiträume und der Rest. */}
+      <div className="raster kpi">
+        <Kachel label={s.todayDate ? `Heute · ${fmtDay(s.todayDate).slice(0, 6)}` : 'Heute'} klasse="heute"
+          wert={heuteGemeldet ? s.kpis.today : '–'} cur={cur} fuss={heuteFuss}
+          titel="Der laufende Tag ist noch nicht vollständig und zählt in keinem Vergleich mit." />
+      </div>
+
+      {s.apps?.length > 0 && (
+        <div className="karte" style={{ marginBottom: 14 }}>
+          <div className="zs-titel"><h2>Heute je App</h2></div>
+          <AppListe apps={s.apps} wertFuer={heuteWert} cur={cur} mitLeeren />
+          <div className="zs-ohne"><span>Summe</span><b>{fmtMoney(heuteSumme, cur)}</b></div>
+          <p className="hinweis klein" style={{ marginTop: 8 }}>
+            AdMob meldet den laufenden Tag mit Verzug; die Beträge füllen sich über den Tag.
+          </p>
+        </div>
+      )}
+
       <div className="hero">
         <div className="hero-kopf">
           <div>
@@ -137,25 +156,6 @@ export default function Uebersicht({ s, onEinrichten }) {
       </div>
 
       <Zusammensetzung s={s} reihe={reihe} tagTitel={heroTitel} />
-
-      {/* Reihenfolge nach der Frage beim Öffnen: gestern und woraus es besteht, heute, welche App heute was bringt -
-          erst danach die Zeiträume und der Rest. */}
-      <div className="raster kpi">
-        <Kachel label={s.todayDate ? `Heute · ${fmtDay(s.todayDate).slice(0, 6)}` : 'Heute'} klasse="heute"
-          wert={heuteGemeldet ? s.kpis.today : '–'} cur={cur} fuss={heuteFuss}
-          titel="Der laufende Tag ist noch nicht vollständig und zählt in keinem Vergleich mit." />
-      </div>
-
-      {s.apps?.length > 0 && (
-        <div className="karte" style={{ marginBottom: 14 }}>
-          <div className="zs-titel"><h2>Heute je App</h2></div>
-          <AppListe apps={s.apps} wertFuer={heuteWert} cur={cur} mitLeeren />
-          <div className="zs-ohne"><span>Summe</span><b>{fmtMoney(heuteSumme, cur)}</b></div>
-          <p className="hinweis klein" style={{ marginTop: 8 }}>
-            AdMob meldet den laufenden Tag mit Verzug; die Beträge füllen sich über den Tag.
-          </p>
-        </div>
-      )}
 
       <div className="raster kpi">
         <Kachel label="7 Tage" wert={d7.jetzt} cur={cur} delta={d7.delta} davor={d7.davor} fuss="ggü. 7 Tagen davor" />
