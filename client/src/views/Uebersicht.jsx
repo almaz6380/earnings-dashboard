@@ -2,9 +2,9 @@ import React from 'react';
 import { fmtMoney, fmtZahl, fmtDay, fmtMonth, SOURCE_ORDER } from '../format.js';
 import { SERIE } from '../theme.js';
 import { TrendFlaeche, Sparkline, farbe } from '../charts.jsx';
-import { Kachel, Delta, Punkt, Warnzeile, Leer, AnteilsBalken } from '../components.jsx';
-import { reiheBis, fenster, monat, schnittDavor, anteil, summe } from '../kennzahlen.js';
-import AppIcon from '../AppIcon.jsx';
+import { Kachel, Delta, Punkt, Warnzeile, Leer } from '../components.jsx';
+import { reiheBis, fenster, monat, schnittDavor, anteil, runde } from '../kennzahlen.js';
+import Zusammensetzung, { AppListe } from '../Zusammensetzung.jsx';
 
 const geld = (b) => b.filter((x) => x.eur != null).reduce((a, x) => a + x.eur, 0);
 
@@ -93,23 +93,14 @@ export default function Uebersicht({ s, onEinrichten }) {
   const heroDelta = tagVollstaendig ? anteil(s.kpis.lastDay, heroSchnitt) : null;
   const trend = reihe.slice(-30);
 
-  const verteilung = quellen
-    .filter((q) => q.countsInTotal && q.hasDaily)
-    .map((q) => ({ id: q.id, name: q.label, farbe: farbe(q.id), wert: summe(reihe.slice(-30), q.id) }))
-    .filter((t) => t.wert > 0);
-
-  const top = [...(s.apps || [])].filter((a) => a.d30 > 0).sort((a, b) => b.d30 - a.d30).slice(0, 5);
-  // Heute je App und Plattform, größter Umsatz oben. Apps ohne Betrag stehen mit darunter:
+  // Heute je App und Plattform. Apps ohne Betrag stehen mit darunter:
   // sonst sähe „noch nichts gemeldet" aus wie „App fehlt".
-  const heuteApps = [...(s.apps || [])]
-    .map((a) => ({ ...a, heute: a.today || 0 }))
-    .sort((a, b) => b.heute - a.heute || a.name.localeCompare(b.name));
-  const heuteSumme = Math.round(heuteApps.reduce((x, a) => x + a.heute, 0) * 100) / 100;
+  const heuteWert = (tage) => tage?.[s.todayDate] || 0;
+  const heuteSumme = runde((s.apps || []).reduce((x, a) => x + heuteWert(a.tage), 0));
   const gestern = s.todayDate
     ? new Date(Date.parse(`${s.todayDate}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)
     : null;
   const heroTitel = s.lastDayDate === gestern ? 'Gestern' : 'Letzter Tag';
-  const maxApp = top[0]?.d30 || 1;
   const payouts = s.payouts.slice(0, 6);
 
   if (!aktive.length) {
@@ -145,7 +136,9 @@ export default function Uebersicht({ s, onEinrichten }) {
         )}
       </div>
 
-      {/* Reihenfolge nach der Frage beim Öffnen: gestern, heute, welche App heute was bringt -
+      <Zusammensetzung s={s} reihe={reihe} tagTitel={heroTitel} />
+
+      {/* Reihenfolge nach der Frage beim Öffnen: gestern und woraus es besteht, heute, welche App heute was bringt -
           erst danach die Zeiträume und der Rest. */}
       <div className="raster kpi">
         <Kachel label={s.todayDate ? `Heute · ${fmtDay(s.todayDate).slice(0, 6)}` : 'Heute'} klasse="heute"
@@ -153,27 +146,11 @@ export default function Uebersicht({ s, onEinrichten }) {
           titel="Der laufende Tag ist noch nicht vollständig und zählt in keinem Vergleich mit." />
       </div>
 
-      {heuteApps.length > 0 && (
+      {s.apps?.length > 0 && (
         <div className="karte" style={{ marginBottom: 14 }}>
-          <h2>Heute je App</h2>
-          <table>
-            <tbody>
-              {heuteApps.map((a) => (
-                <tr key={a.key}>
-                  <td>
-                    <div className="appzeile">
-                      <AppIcon src={a.icon} name={a.name} color={farbe(a.sources[0]?.id)} size={28} />
-                      <div style={{ minWidth: 0 }}>{a.name}</div>
-                    </div>
-                  </td>
-                  <td className="zahl" style={a.heute ? undefined : { color: 'var(--ink3)' }}><b>{fmtMoney(a.heute, cur)}</b></td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr><td><b>Summe</b></td><td className="zahl"><b>{fmtMoney(heuteSumme, cur)}</b></td></tr>
-            </tfoot>
-          </table>
+          <div className="zs-titel"><h2>Heute je App</h2></div>
+          <AppListe apps={s.apps} wertFuer={heuteWert} cur={cur} mitLeeren />
+          <div className="zs-ohne"><span>Summe</span><b>{fmtMoney(heuteSumme, cur)}</b></div>
           <p className="hinweis klein" style={{ marginTop: 8 }}>
             AdMob meldet den laufenden Tag mit Verzug; die Beträge füllen sich über den Tag.
           </p>
@@ -205,44 +182,10 @@ export default function Uebersicht({ s, onEinrichten }) {
       )}
       {s.fxError && <Warnzeile>Wechselkurse gerade nicht erreichbar ({s.fxError}).</Warnzeile>}
 
-      {verteilung.length > 1 && (
-        <>
-          <div className="abschnitt">Woher das Geld kam <span className="zusatz">30 Tage</span></div>
-          <div className="karte">
-            <AnteilsBalken teile={verteilung} cur={cur} />
-            {s.subsSource === 'revenuecat' && (s.bySource.appstore?.hasDaily || s.bySource.play?.hasDaily) && (
-              <p className="hinweis klein" style={{ marginTop: 12 }}>
-                App Store und Google Play stehen hier nicht, weil RevenueCat den Abo-Umsatz schon meldet. Sonst zählte er doppelt.
-              </p>
-            )}
-          </div>
-        </>
-      )}
-
       <div className="abschnitt">Quellen</div>
       <div className="raster quellen">
         {aktive.map((src) => <Quellenkarte key={src.id} src={src} s={s} reihe={reihe} />)}
       </div>
-
-      {top.length > 0 && (
-        <>
-          <div className="abschnitt">Größte Apps <span className="zusatz">30 Tage</span></div>
-          <div className="karte">
-            <div className="balken">
-              {top.map((a) => (
-                <div className="balkenzeile" key={a.key}>
-                  <AppIcon src={a.icon} name={a.name} color={farbe(a.sources[0]?.id)} size={28} />
-                  <div className="nm">{a.name}</div>
-                  <div className="spur">
-                    <div className="fuellung" style={{ width: `${Math.max(3, Math.round((a.d30 / maxApp) * 100))}%`, background: SERIE.admob }} />
-                  </div>
-                  <div className="v">{fmtMoney(a.d30, cur, a.d30 < 10 ? 2 : 0)}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
 
       {payouts.length > 0 && (
         <>

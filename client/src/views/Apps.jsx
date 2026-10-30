@@ -3,6 +3,7 @@ import { fmtMoney, fmtDay, SOURCE_ORDER } from '../format.js';
 import { StapelBalken, Legende, farbe } from '../charts.jsx';
 import { Punkt, Leer } from '../components.jsx';
 import AppIcon from '../AppIcon.jsx';
+import { summeTage } from '../kennzahlen.js';
 
 const ZEITRAEUME = [
   { id: 'heute', t: 'Heute' },
@@ -25,9 +26,7 @@ function spanne(id, heute, von, bis) {
   return von <= bis ? [von, bis] : [bis, von];
 }
 
-const summeIn = (tage, [von, bis]) => Math.round(
-  Object.entries(tage || {}).reduce((a, [d, v]) => (d >= von && d <= bis ? a + v : a), 0) * 100,
-) / 100;
+const summeIn = (tage, [von, bis]) => summeTage(tage, von, bis);
 // Quellen, die überhaupt je App aufschlüsseln können (AdSense sind Webseiten, keine Apps).
 const APP_QUELLEN = ['admob', 'revenuecat', 'appstore', 'play'];
 
