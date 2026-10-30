@@ -56,3 +56,42 @@ export function schnittDavor(reihe, tage = 7, feld = 'total') {
   const teil = reihe.slice(-(tage + 1), -1);
   return teil.length === tage ? summe(teil, feld) / tage : null;
 }
+
+const tagPlus = (ymd, n) => new Date(Date.parse(`${ymd}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+// Summe einer Tageszuordnung (Datum → Betrag) zwischen zwei Tagen einschließlich.
+export function summeTage(tage, von, bis) {
+  return runde(Object.entries(tage || {}).reduce((a, [d, v]) => (d >= von && d <= bis ? a + v : a), 0));
+}
+
+// Grenzen eines Zeitraums und seines Vergleichs, endend am letzten Tag der Reihe.
+// Beim einzelnen Tag ist der Vergleich der Schnitt der sieben Tage davor (`teiler`),
+// wie bei der großen Zahl oben - ein einzelner Vortag schwankt zu stark.
+// `davor` ist null, wenn die Reihe den Vergleichszeitraum nicht ganz enthält.
+export function bereichFuer(reihe, art) {
+  const bis = reihe[reihe.length - 1]?.date;
+  if (!bis) return null;
+  const erster = reihe[0].date;
+  let von, davor, teiler = 1;
+  if (art === 'tag') {
+    von = bis;
+    davor = [tagPlus(bis, -7), tagPlus(bis, -1)];
+    teiler = 7;
+  } else if (art === 'monat') {
+    const [j, m, t] = bis.split('-').map(Number);
+    von = `${bis.slice(0, 7)}-01`;
+    const vormonat = new Date(Date.UTC(j, m - 2, 1)).toISOString().slice(0, 7);
+    const letzterTag = new Date(Date.UTC(j, m - 1, 0)).getUTCDate();
+    davor = [`${vormonat}-01`, `${vormonat}-${String(Math.min(t, letzterTag)).padStart(2, '0')}`];
+  } else {
+    const n = art === 'd7' ? 7 : 30;
+    von = tagPlus(bis, -(n - 1));
+    davor = [tagPlus(von, -n), tagPlus(von, -1)];
+  }
+  return { von, bis, davor: erster <= davor[0] ? davor : null, teiler };
+}
+
+// Summe eines Feldes der Tagesreihe zwischen zwei Tagen.
+export function summeZwischen(reihe, von, bis, feld = 'total') {
+  return summe(reihe.filter((r) => r.date >= von && r.date <= bis), feld);
+}
