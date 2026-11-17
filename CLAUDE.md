@@ -42,6 +42,12 @@ Ort, an dem Fehler im Client auffallen, es gibt keinen Typprüfer und kein Linti
   regelmäßig. `runCollect` hält deshalb eine Sperre mit Verfall (`u:<id>:sperre`); wer
   sie nicht bekommt, ändert nichts und meldet `laeuft`.
 
+- **Zwischenstände des Tages bleiben klein.** Die Dienste melden nur Tagessummen; der
+  Stundenverlauf entsteht, weil jeder Sammellauf den Stand des laufenden Tages festhält
+  (`history.intraday`, `merkeZwischenstand`). Der Worker liest den Verlauf bei jedem
+  `/api/state`, darum: ein Punkt nur bei Änderung, höchstens einer je Viertelstunde, nur
+  heute und gestern.
+
 - **Eine einzige Vercel-Funktion.** Der Hobby-Tarif erlaubt zwölf pro Deployment, je
   Endpunkt eine Datei wären neunzehn. `vercel.json` leitet alles auf `api/index.js` um.
   Neue Endpunkte kommen nach `server/routen.js`, nicht als neue Datei in `api/`.

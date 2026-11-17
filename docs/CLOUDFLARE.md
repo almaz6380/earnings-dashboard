@@ -44,6 +44,11 @@ Worker-Secrets zu Cloudflare.
   zwei Jahre Verlauf neu (CPU) und liest Verlauf und Kurse mit (Speicher-Befehle).
   `/api/stand` kostet einen einzigen Befehl: Konto und letzter Lauf kommen in einem
   MGET, und geprüft wird nur das signierte Token.
+- **Der Stundenverlauf ist so fein wie die Sammelläufe.** Keine Quelle liefert Stundenwerte.
+  Jeder Lauf hält fest, wo der laufende Tag steht (`history.intraday`), und die Kurve „1T“
+  zeigt diese Zwischenstände. Liegen Stunden zwischen zwei Läufen, steht der Zuwachs am
+  späteren Punkt. Gespeichert wird nur bei Änderung, höchstens ein Punkt je Viertelstunde
+  und nur für heute und gestern, damit `/api/state` unter der 10-ms-Grenze bleibt.
 - **Auf GitHubs Zeitplan ist kein Verlass.** Gemessen am 05.10.2026: 17 von rund 90
   geplanten Sammelläufen in fünf Tagen, Abstände von drei bis fünf Stunden, Minuten
   beliebig. GitHub sagt für `schedule` keine Zeit zu und verwirft Läufe unter Last; ein
