@@ -95,3 +95,28 @@ export function bereichFuer(reihe, art) {
 export function summeZwischen(reihe, von, bis, feld = 'total') {
   return summe(reihe.filter((r) => r.date >= von && r.date <= bis), feld);
 }
+
+// Zwischenstände von heute und gestern auf eine gemeinsame Zeitachse legen (Millisekunden
+// des heutigen Tages; gestern um 24 Stunden verschoben). Zwischen zwei Abrufen gilt der
+// letzte bekannte Stand weiter - die Dienste melden Summen, keinen Verlauf, und eine
+// schräge Linie behauptete einen gleichmäßigen Zuwachs, den niemand gemessen hat.
+// Heute endet bei `jetzt`; danach bleibt `wert` leer, die Vergleichslinie läuft weiter.
+export function tagesKurve(heute, gestern, tagDatum, jetzt = Date.now()) {
+  const start = Date.parse(`${tagDatum}T00:00:00Z`);
+  const ende = start + 86400000;
+  const h = (heute || []).map((p) => ({ x: Date.parse(p.t), p }));
+  const g = (gestern || []).map((p) => ({ x: Date.parse(p.t) + 86400000, p }));
+  const bis = Math.min(Math.max(jetzt, h.at(-1)?.x ?? start), ende);
+  const marken = [...new Set([start, ...h.map((e) => e.x), ...g.map((e) => e.x), ...(h.length ? [bis] : []), ende])]
+    .filter((x) => x >= start && x <= ende).sort((a, b) => a - b);
+  const standBei = (liste, x) => { let s = null; for (const e of liste) { if (e.x <= x) s = e.p; else break; } return s; };
+  return marken.map((x) => {
+    const ph = standBei(h, x), pg = standBei(g, x);
+    return {
+      x,
+      wert: h.length && x <= bis ? (ph?.total ?? 0) : null,
+      gestern: g.length ? (pg?.total ?? 0) : null,
+      punkt: x <= bis ? ph : null,
+    };
+  });
+}

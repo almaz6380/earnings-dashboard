@@ -1,6 +1,6 @@
 import React, { useId } from 'react';
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  AreaChart, Area, BarChart, Bar, ComposedChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
 import { SERIE, FLAECHE, TINTE, CHROM, TICK } from './theme.js';
 import { fmtMoney } from './format.js';
@@ -176,6 +176,48 @@ export function TrendFlaeche({ daten, feld, cur, color = SERIE.admob, name, fmtL
             ? <circle key="ende" cx={p.cx} cy={p.cy} r={4} fill={color} stroke={FLAECHE.karte} strokeWidth={2} />
             : null)} />
       </AreaChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ---- Kurslinie: zum Durchfahren, die Werte stehen außerhalb des Diagramms ---
+//
+// Kein Tooltip-Kasten: unter dem Finger verdeckte er genau die Stelle, auf die man
+// zeigt. Das Diagramm meldet nur, welcher Punkt aktiv ist (`onAktiv`), und die Karte
+// darüber zeigt Zahl und Aufteilung. `vergleich` zeichnet eine zweite, blasse Linie
+// aus dem Feld `gestern`.
+export function KursLinie({ daten, stufen, zahlenAchse, bereich, ticks, fmtTick, vergleich, onAktiv, color = SERIE.admob, hoehe = 190 }) {
+  const id = useId().replace(/:/g, '');
+  const melde = (z) => onAktiv(z?.isTooltipActive && z.activeTooltipIndex != null ? z.activeTooltipIndex : null);
+  // Endmarke am letzten Punkt mit Wert - bei „Heute" endet die Linie mitten im Diagramm.
+  let ende = -1;
+  daten.forEach((d, i) => { if (d.wert != null) ende = i; });
+  const form = stufen ? 'stepAfter' : 'monotone';
+  return (
+    <ResponsiveContainer width="100%" height={hoehe}>
+      <ComposedChart data={daten} margin={{ top: 8, right: 20, left: 20, bottom: 0 }}
+        onMouseMove={melde} onMouseLeave={() => onAktiv(null)}>
+        <defs>
+          <linearGradient id={`kl${id}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.26} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <XAxis dataKey="x" type={zahlenAchse ? 'number' : 'category'} domain={bereich} ticks={ticks} tickFormatter={fmtTick}
+          tick={TICK} axisLine={false} tickLine={false} minTickGap={30} interval="preserveStartEnd" />
+        <YAxis hide domain={[0, (max) => (max > 0 ? max * 1.08 : 1)]} />
+        <Tooltip content={() => null} cursor={{ stroke: TINTE.gedaempft, strokeWidth: 1 }} />
+        {vergleich && (
+          <Line type={form} dataKey="gestern" stroke={TINTE.gedaempft} strokeWidth={1.5} strokeDasharray="3 4"
+            dot={false} activeDot={false} isAnimationActive={false} connectNulls={false} />
+        )}
+        <Area type={form} dataKey="wert" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+          fill={`url(#kl${id})`} isAnimationActive={false} connectNulls={false}
+          activeDot={{ r: 5, fill: color, stroke: FLAECHE.karte, strokeWidth: 2 }}
+          dot={(p) => (p.index === ende
+            ? <circle key="ende" cx={p.cx} cy={p.cy} r={4} fill={color} stroke={FLAECHE.karte} strokeWidth={2} />
+            : null)} />
+      </ComposedChart>
     </ResponsiveContainer>
   );
 }

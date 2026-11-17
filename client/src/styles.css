@@ -192,6 +192,24 @@ nav.tabs button.active { background: var(--karte3); color: var(--ink); }
 .hero-flaeche { margin: 6px -18px 0; }
 @media (min-width: 520px) { .hero-wert { font-size: 52px; } }
 
+/* Ohne Kurve braucht die Karte unten denselben Rand wie oben. */
+.hero.ohne-kurve { padding-bottom: 16px; }
+
+/* ---- Kursverlauf zum Durchfahren ---------------------------------------- */
+
+.kurs { padding-bottom: 14px; }
+.kurs-zusatz { font-size: 12.5px; color: var(--ink3); margin-top: 5px; min-height: 18px; }
+/* pan-y: senkrecht scrollt die Seite weiter, waagerecht gehört die Bewegung der Kurve. */
+.kurs-flaeche { margin: 4px -18px 0; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.kurs-leer { height: 190px; display: grid; place-items: center; color: var(--ink3); font-size: 13px; padding: 0 24px; text-align: center; }
+.kurs-wahl { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.kurs-wahl .segment button { padding: 6px 11px; }
+.kurs-legende { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink3); margin-left: auto; }
+.kurs-legende i { width: 16px; border-top: 1.5px dashed var(--ink3); }
+.kurs-teile { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--linie); }
+.kurs-uebrige { font-size: 12px; color: var(--ink3); }
+.kurs-hinweis { margin: 12px 0 0; }
+
 /* ---- Kennzahl-Kachel ---------------------------------------------------- */
 
 .kachel {
@@ -249,7 +267,7 @@ nav.tabs button.active { background: var(--karte3); color: var(--ink); }
 .zs-kanal { display: flex; align-items: center; gap: 8px; font-size: 13.5px; min-height: 22px; }
 .zs-kanal .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink2); }
 .zs-kanal .zs-delta .delta { font-size: 11.5px; }
-.zs-kanal i { font-style: normal; color: var(--ink3); font-size: 12px; width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+.zs-kanal i { font-style: normal; color: var(--ink3); font-size: 12px; min-width: 38px; white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 .zs-kanal b { flex: 0 0 auto; min-width: 72px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 .zs-kanal.null .nm, .zs-kanal.null b { color: var(--ink3); }
 .zs-fehlt { color: var(--ink3); font-size: 12px; font-style: italic; }

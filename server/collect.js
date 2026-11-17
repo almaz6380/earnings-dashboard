@@ -11,7 +11,7 @@ import { konfiguration, nutzbare, beschriftung } from './quellen.js';
 import { googleFor } from './google/oauth.js';
 import { revenuecatFor, konfiguriert as rcKonfiguriert } from './revenuecat/oauth.js';
 
-export const emptyHistory = () => ({ daily: {}, payouts: {}, balances: {}, sources: {}, apps: {} });
+export const emptyHistory = () => ({ daily: {}, payouts: {}, balances: {}, sources: {}, apps: {}, intraday: {} });
 
 export const baseOf = (u) => normBase(u?.settings?.baseCurrency);
 
@@ -92,7 +92,7 @@ async function sammeln(u, { notify, nurLeicht }) {
   const hKey = ukey(u.id, 'history'), lKey = ukey(u.id, 'latest');
   const history = (await loadJSON(hKey)) || emptyHistory();
   const vorher = await loadJSON(lKey);
-  history.daily ||= {}; history.payouts ||= {}; history.balances ||= {}; history.sources ||= {}; history.apps ||= {};
+  history.daily ||= {}; history.payouts ||= {}; history.balances ||= {}; history.sources ||= {}; history.apps ||= {}; history.intraday ||= {};
   const today = new Date().toISOString().slice(0, 10);
   const results = {};
 
@@ -136,6 +136,7 @@ async function sammeln(u, { notify, nurLeicht }) {
     try { await ergaenzeIcons(history); } catch { /* ohne Icons ist der Lauf trotzdem gültig */ }
   }
 
+  merkeZwischenstand(history, today);
   pruneHistory(history);
   await saveJSON(hKey, history);
   const latest = { collectedAt: new Date().toISOString(), ms: Date.now() - started, fxDate: fx.date, results };
@@ -229,7 +230,33 @@ export function mergeApps(history, id, data, today) {
   for (const app of Object.values(proQuelle)) for (const v of Object.values(app.daily)) delete v.__fresh;
 }
 
-// Verlauf begrenzen: Tageswerte 2 Jahre, Guthaben-Snapshots 1 Jahr.
+// Die Dienste melden nur Tagessummen. Den Verlauf innerhalb eines Tages gibt es darum nur,
+// wenn jeder Lauf festhält, wo der laufende Tag gerade steht. Sparsam, weil der Worker den
+// Verlauf bei jedem /api/state liest und rechnet: ein Punkt nur, wenn sich etwas geändert
+// hat, und höchstens einer je Viertelstunde - der spätere ersetzt dann den früheren.
+const VIERTELSTUNDE = 15 * 60000;
+export function merkeZwischenstand(history, today, jetzt = new Date()) {
+  const q = {}, a = {};
+  for (const [id, tage] of Object.entries(history.daily || {})) {
+    if (tage[today]) q[id] = { ...tage[today] };
+  }
+  for (const [id, proQuelle] of Object.entries(history.apps || {})) {
+    for (const [appId, app] of Object.entries(proQuelle || {})) {
+      if (app.daily?.[today]) (a[id] ||= {})[appId] = { ...app.daily[today] };
+    }
+  }
+  // Solange keine Quelle den Tag gemeldet hat, gibt es nichts festzuhalten.
+  if (!Object.keys(q).length) return;
+  const punkte = ((history.intraday ||= {})[today] ||= []);
+  const letzter = punkte.at(-1);
+  if (letzter && JSON.stringify([letzter.q, letzter.a]) === JSON.stringify([q, a])) return;
+  const punkt = { t: jetzt.toISOString(), q, a };
+  const gleichesFach = letzter && Math.floor(Date.parse(letzter.t) / VIERTELSTUNDE) === Math.floor(jetzt.getTime() / VIERTELSTUNDE);
+  if (gleichesFach) punkte[punkte.length - 1] = punkt; else punkte.push(punkt);
+}
+
+// Verlauf begrenzen: Tageswerte 2 Jahre, Guthaben-Snapshots 1 Jahr, Zwischenstände
+// nur heute und gestern - mehr zeigt die Oberfläche nicht.
 export function pruneHistory(history, now = new Date()) {
   const cutDaily = new Date(now.getTime() - 730 * 86400000).toISOString().slice(0, 10);
   const cutBal = new Date(now.getTime() - 365 * 86400000).toISOString().slice(0, 10);
@@ -238,4 +265,6 @@ export function pruneHistory(history, now = new Date()) {
     for (const app of Object.values(quelle)) for (const k of Object.keys(app.daily)) if (k < cutDaily) delete app.daily[k];
   }
   for (const k of Object.keys(history.balances)) if (k < cutBal) delete history.balances[k];
+  const cutIntra = new Date(now.getTime() - 86400000).toISOString().slice(0, 10);
+  for (const k of Object.keys(history.intraday || {})) if (k < cutIntra) delete history.intraday[k];
 }

@@ -35,6 +35,15 @@ export function seitAuszahlung({ eurDaily, offen, verlauf, today }) {
   return { wert: round2(offen + laufend), offen: round2(offen), laufend, von };
 }
 
+// Eine Zeile je App und Plattform: iOS und Android sind im Store getrennte Apps und
+// sollen einzeln sichtbar sein. Was ohne Plattform kommt (RevenueCat je Projekt),
+// bekommt eine eigene Zeile ohne Zusatz, statt einer Plattform zugeschlagen zu werden.
+const zeilenKey = (appId, app) => {
+  const basis = appKey((app?.name || appId).trim());
+  if (!basis) return null;
+  return app?.platform ? `${basis}:${app.platform}` : basis;
+};
+
 export function buildSummary(history, fx, latest = null, now = new Date()) {
   const today = now.toISOString().slice(0, 10);
   const meta = Object.fromEntries(SOURCES.map((s) => [s.meta.id, s.meta]));
@@ -179,11 +188,8 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
       const name = (app?.name || appId).trim();
       const basis = appKey(name);
       if (!basis) continue;
-      // Eine Zeile je App und Plattform: iOS und Android sind im Store getrennte Apps und
-      // sollen einzeln sichtbar sein. Was ohne Plattform kommt (RevenueCat je Projekt),
-      // bekommt eine eigene Zeile ohne Zusatz, statt einer Plattform zugeschlagen zu werden.
       const plattform = app?.platform || null;
-      const key = plattform ? `${basis}:${plattform}` : basis;
+      const key = zeilenKey(appId, app);
       let eintrag = appsByKey.get(key);
       if (!eintrag) {
         eintrag = { key, app: basis, plattform, name, icon: null, sources: {}, __daily: {} };
@@ -237,6 +243,28 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     return row;
   });
 
+  // Zwischenstände des laufenden Tages und des Vortags, umgerechnet und auf die Quellen
+  // beschränkt, die auch in die Summe zählen - so endet die Kurve bei derselben Zahl
+  // wie die Kennzahl „Heute".
+  const zwischenstaende = (datum) => (history.intraday?.[datum] || []).map((p) => {
+    const eur = (byCur) => round2(Object.entries(byCur || {}).reduce((s, [cur, amt]) => s + (toBase(amt, cur, fx) ?? 0), 0));
+    const punkt = { t: p.t, apps: {} };
+    let total = 0;
+    for (const id of earnedIds) {
+      if (!p.q?.[id]) continue;
+      punkt[id] = eur(p.q[id]);
+      total += punkt[id];
+      for (const [appId, byCur] of Object.entries(p.a?.[id] || {})) {
+        const key = zeilenKey(appId, history.apps?.[id]?.[appId]);
+        // Je App nach Quelle getrennt, damit die Zeile ihren Balken auch hier einfärben kann.
+        if (key) (punkt.apps[key] ||= {})[id] = round2((punkt.apps[key]?.[id] || 0) + eur(byCur));
+      }
+    }
+    punkt.total = round2(total);
+    return punkt;
+  });
+  const intraday = { heute: zwischenstaende(today), gestern: zwischenstaende(dstr(1)) };
+
   const accountsEur = round2(['wise', 'paypal'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
   const openEur = round2(['adsense'].flatMap((id) => bySource[id].balances).filter((b) => b.eur != null).reduce((a, b) => a + b.eur, 0));
 
@@ -267,6 +295,7 @@ export function buildSummary(history, fx, latest = null, now = new Date()) {
     monthly,
     payouts,
     appSeries,
+    intraday,
     accountsEur,
     openEur,
     googleSeitAuszahlung,

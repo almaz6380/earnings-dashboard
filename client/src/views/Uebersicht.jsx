@@ -1,10 +1,10 @@
 import React from 'react';
 import { fmtMoney, fmtZahl, fmtDay, fmtMonth, SOURCE_ORDER } from '../format.js';
-import { SERIE } from '../theme.js';
-import { TrendFlaeche, Sparkline, farbe } from '../charts.jsx';
+import { Sparkline, farbe } from '../charts.jsx';
 import { Kachel, Delta, Punkt, Warnzeile, Leer } from '../components.jsx';
-import { reiheBis, fenster, monat, schnittDavor, anteil, runde } from '../kennzahlen.js';
-import Zusammensetzung, { AppListe } from '../Zusammensetzung.jsx';
+import { reiheBis, fenster, monat, schnittDavor, anteil } from '../kennzahlen.js';
+import Zusammensetzung from '../Zusammensetzung.jsx';
+import Kursverlauf from '../Kursverlauf.jsx';
 
 const geld = (b) => b.filter((x) => x.eur != null).reduce((a, x) => a + x.eur, 0);
 
@@ -79,24 +79,9 @@ export default function Uebersicht({ s, onEinrichten }) {
   // Fehlt an diesem Tag noch eine Quelle, wäre jeder Vergleich ein Vergleich von
   // Unvollständigem mit Vollständigem - dann lieber gar keine Veränderung zeigen.
   const tagVollstaendig = !s.lastDayFehlend?.length;
-  // Heute laeuft noch. Der Wert bekommt deshalb keine Veraenderung und keinen Vergleich,
-  // sondern nur die Angabe, wer bereits gemeldet hat. Hat noch niemand geliefert, ist
-  // ein Strich ehrlicher als eine Null - die waere von "verdient nichts" nicht zu
-  // unterscheiden.
-  const heuteGemeldet = !!s.todaySources?.length;
-  const heuteFuss = !heuteGemeldet
-    ? 'noch keine Meldung'
-    : s.todayFehlend?.length
-      ? `bisher nur ${s.todaySources.join(' und ')}`
-      : 'läuft noch, unvollständig';
   const heroSchnitt = schnittDavor(reihe, 7);
   const heroDelta = tagVollstaendig ? anteil(s.kpis.lastDay, heroSchnitt) : null;
-  const trend = reihe.slice(-30);
 
-  // Heute je App und Plattform. Apps ohne Betrag stehen mit darunter:
-  // sonst sähe „noch nichts gemeldet" aus wie „App fehlt".
-  const heuteWert = (tage) => tage?.[s.todayDate] || 0;
-  const heuteSumme = runde((s.apps || []).reduce((x, a) => x + heuteWert(a.tage), 0));
   const gestern = s.todayDate
     ? new Date(Date.parse(`${s.todayDate}T00:00:00Z`) - 86400000).toISOString().slice(0, 10)
     : null;
@@ -115,26 +100,11 @@ export default function Uebersicht({ s, onEinrichten }) {
 
   return (
     <>
-      {/* Reihenfolge nach der Frage beim Öffnen: heute, welche App heute was bringt, dann gestern und woraus es
-          besteht - erst danach die Zeiträume und der Rest. */}
-      <div className="raster kpi">
-        <Kachel label={s.todayDate ? `Heute · ${fmtDay(s.todayDate).slice(0, 6)}` : 'Heute'} klasse="heute"
-          wert={heuteGemeldet ? s.kpis.today : '–'} cur={cur} fuss={heuteFuss}
-          titel="Der laufende Tag ist noch nicht vollständig und zählt in keinem Vergleich mit." />
-      </div>
+      {/* Reihenfolge nach der Frage beim Öffnen: der laufende Tag als Kurve zum Durchfahren, dann
+          gestern und woraus es besteht - erst danach die Zeiträume und der Rest. */}
+      <Kursverlauf s={s} reihe={reihe} />
 
-      {s.apps?.length > 0 && (
-        <div className="karte" style={{ marginBottom: 14 }}>
-          <div className="zs-titel"><h2>Heute je App</h2></div>
-          <AppListe apps={s.apps} wertFuer={heuteWert} cur={cur} mitLeeren />
-          <div className="zs-ohne"><span>Summe</span><b>{fmtMoney(heuteSumme, cur)}</b></div>
-          <p className="hinweis klein" style={{ marginTop: 8 }}>
-            AdMob meldet den laufenden Tag mit Verzug; die Beträge füllen sich über den Tag.
-          </p>
-        </div>
-      )}
-
-      <div className="hero">
+      <div className="hero ohne-kurve">
         <div className="hero-kopf">
           <div>
             <div className="hero-label">{s.lastDayDate ? `${heroTitel} · ${fmtDay(s.lastDayDate).slice(0, 6)}` : heroTitel}</div>
@@ -144,14 +114,6 @@ export default function Uebersicht({ s, onEinrichten }) {
         </div>
         {!tagVollstaendig && s.lastDayDate && (
           <div className="hero-fehlt">Ohne {s.lastDayFehlend.join(' und ')} – für diesen Tag noch nicht gemeldet.</div>
-        )}
-        {trend.length > 1 && (
-          <div className="hero-flaeche">
-            <TrendFlaeche daten={trend} feld="total" cur={cur} color={SERIE.admob} name="Summe"
-              fmtLabel={(d) => fmtDay(d).slice(0, 6)} hoehe={116} achsen={false} />
-            {/* Ohne Achsen braucht die Fläche eine Beschriftung, sonst ist der Zeitraum geraten. */}
-            <div className="hero-spanne"><span>{fmtDay(trend[0].date).slice(0, 6)}</span><span>Summe je Tag</span><span>{fmtDay(trend[trend.length - 1].date).slice(0, 6)}</span></div>
-          </div>
         )}
       </div>
 
